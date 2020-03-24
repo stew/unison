@@ -631,6 +631,7 @@ getTypeEdit = getWord8 >>= \case
 
 putStar3
   :: MonadPut m
+  => Ord f
   => (f -> m ())
   -> (d1 -> m ())
   -> (d2 -> m ())
@@ -638,6 +639,7 @@ putStar3
   -> Star3 f d1 d2 d3
   -> m ()
 putStar3 putF putD1 putD2 putD3 s = do
+  -- todo: `fact` is redundant, can eliminate from v2
   putFoldable putF (Star3.fact s)
   putRelation putF putD1 (Star3.d1 s)
   putRelation putF putD2 (Star3.d2 s)
@@ -652,12 +654,12 @@ getStar3
   -> m (Star3 fact d1 d2 d3)
 getStar3 getF getD1 getD2 getD3 =
   Star3.Star3
-    <$> (Set.fromList <$> getList getF)
+    <$ (getList getF)   -- todo: `fact` is redundant, can eliminate from v2
     <*> getRelation getF getD1
     <*> getRelation getF getD2
     <*> getRelation getF getD3
 
-putBranchStar :: MonadPut m => (a -> m ()) -> (n -> m ()) -> Branch.Star a n -> m ()
+putBranchStar :: Ord a => MonadPut m => (a -> m ()) -> (n -> m ()) -> Branch.Star a n -> m ()
 putBranchStar putA putN =
   putStar3 putA putN putMetadataType (putPair putMetadataType putMetadataValue)
 
