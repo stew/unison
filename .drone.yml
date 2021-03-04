@@ -15,4 +15,4 @@ steps:
      commands:
       - stack build
       - stack test
-      - stack transcripts
+      - stack exec transcripts
