@@ -5,7 +5,7 @@ name: default
 
 trigger:
   ref:
-    - refs/heads/master
+    - refs/heads/drone
     - refs/pull/**
     - refs/tags/**
 
