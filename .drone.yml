@@ -10,20 +10,45 @@ trigger:
     - refs/tags/**
 
 steps:
-   - name: deps
-     image: registry.digitalocean.com/stewcasa/haskell-build:1
-     environment:
+  - name: restore-cache
+    image: drillster/drone-volume-cache
+    restore: true
+    mount:
+      - .stack-work
+      - .stack
+      - dist
+    volumes:
+      - /var/lib/drone/cache:/cache
+    when:
+      event: [push, pull_request, tag, deployment]
+
+  - name: deps
+    image: registry.digitalocean.com/stewcasa/haskell-build:1
+    environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-     commands:
+    commands:
       - mkdir -p .stack
       - stack build --test --only-dependencies
 
-   - name: build
-     image: registry.digitalocean.com/stewcasa/haskell-build:1
-     environment:
+  - name: build
+    image: registry.digitalocean.com/stewcasa/haskell-build:1
+    environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-     commands:
-      - mkdir -p .stack
+    commands:
       - stack build
       - stack test
       - stack exec transcripts
+
+  - name: build-cache
+    group: post-build
+    image: drillster/drone-volume-cache
+    rebuild: true
+    mount:
+      - ./.stack-work
+      - ./.stack
+      - dist
+    volumes:
+      - /var/lib/drone/cache:/cache
+    when:
+      branch: drone
+      status: [ success ]
