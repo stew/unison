@@ -31,16 +31,31 @@ steps:
       - mkdir -p .stack
       - stack build --test --only-dependencies
 
-#   - name: build
-#     image: registry.digitalocean.com/stewcasa/haskell-build:2
-#     environment:
-#       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-#     commands:
-#       - stack build
-#       - stack test
-#       - stack exec transcripts
+  - name: cache-deps
+    group: post-build
+    image: drillster/drone-volume-cache
+    rebuild: true
+    mount:
+      - ./.stack-work
+      - ./.stack
+      - dist
+    volumes:
+      - name: cache
+        path: /var/lib/cache
+    when:
+     branch: drone
+     status: [ success ]
 
-  - name: build-cache
+   - name: build
+     image: registry.digitalocean.com/stewcasa/haskell-build:2
+     environment:
+       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
+     commands:
+       - stack build
+       - stack test
+       - stack exec transcripts
+
+  - name: cache-build
     group: post-build
     image: drillster/drone-volume-cache
     rebuild: true
@@ -53,4 +68,3 @@ steps:
         path: /var/lib/cache
     when:
       branch: drone
-#     status: [ success ]
