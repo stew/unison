@@ -13,7 +13,7 @@ steps:
    - name: deps
      image: registry.digitalocean.com/stewcasa/haskell-build:1
      environment:
-      - STACK_ROOT=/drone/src/github.com/stew/unison/.stack
+      STACK_ROOT: /drone/src/github.com/stew/unison/.stack
      commands:
       - mkdir -p .stack
       - stack build --test --only-dependencies
@@ -21,7 +21,7 @@ steps:
    - name: build
      image: registry.digitalocean.com/stewcasa/haskell-build:1
      environment:
-      - STACK_ROOT=/drone/src/github.com/stew/unison/.stack
+      STACK_ROOT: /drone/src/github.com/stew/unison/.stack
      commands:
       - mkdir -p .stack
       - stack build
