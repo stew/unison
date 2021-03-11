@@ -18,7 +18,8 @@ steps:
       - .stack
       - dist
     volumes:
-      - /var/lib/drone/cache:/cache
+      - name: cache
+        path: /var/lib/cache
     when:
       event: [push, pull_request, tag, deployment]
 
@@ -48,7 +49,8 @@ steps:
       - ./.stack
       - dist
     volumes:
-      - /var/lib/drone/cache:/cache
+      - name: cache
+        path: /var/lib/cache
     when:
       branch: drone
       status: [ success ]
