@@ -46,14 +46,14 @@ steps:
      branch: drone
      status: [ success ]
 
-   - name: build
-     image: registry.digitalocean.com/stewcasa/haskell-build:2
-     environment:
-       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-     commands:
-       - stack build
-       - stack test
-       - stack exec transcripts
+  - name: build
+    image: registry.digitalocean.com/stewcasa/haskell-build:2
+    environment:
+      STACK_ROOT: /drone/src/github.com/stew/unison/.stack
+    commands:
+      - stack build
+      - stack test
+      - stack exec transcripts
 
   - name: cache-build
     group: post-build
