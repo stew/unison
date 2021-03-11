@@ -10,9 +10,20 @@ trigger:
     - refs/tags/**
 
 steps:
+   - name: deps
+     image: registry.digitalocean.com/stewcasa/haskell-build:1
+     environment:
+      - STACK_ROOT=/drone/src/github.com/stew/unison/.stack
+     commands:
+      - mkdir -p .stack
+      - stack build --test --only-dependencies
+
    - name: build
      image: registry.digitalocean.com/stewcasa/haskell-build:1
+     environment:
+      - STACK_ROOT=/drone/src/github.com/stew/unison/.stack
      commands:
+      - mkdir -p .stack
       - stack build
       - stack test
       - stack exec transcripts
