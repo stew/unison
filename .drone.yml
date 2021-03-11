@@ -9,17 +9,23 @@ trigger:
     - refs/pull/**
     - refs/tags/**
 
+volumes:
+  - name: cache
+    host:
+      path: /tmp/cache
+    
 steps:
   - name: restore-cache
     image: drillster/drone-volume-cache
-    restore: true
-    mount:
-      - .stack-work
-      - .stack
-      - dist
+    settings:
+      restore: true
+      mount:
+        - .stack-work
+        - .stack
+        - dist
     volumes:
       - name: cache
-        path: /var/lib/cache
+        path: /cache
     when:
       event: [push, pull_request, tag, deployment]
 
@@ -28,20 +34,20 @@ steps:
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
     commands:
-      - mkdir -p .stack
       - stack build --test --only-dependencies
 
   - name: cache-deps
     group: post-build
     image: drillster/drone-volume-cache
-    rebuild: true
-    mount:
-      - ./.stack-work
-      - ./.stack
-      - dist
+    settings:
+      rebuild: true
+      mount:
+        - ./.stack-work
+        - ./.stack
+        - dist
     volumes:
       - name: cache
-        path: /var/lib/cache
+        path: /cache
     when:
      branch: drone
      status: [ success ]
@@ -59,12 +65,13 @@ steps:
     group: post-build
     image: drillster/drone-volume-cache
     rebuild: true
-    mount:
-      - ./.stack-work
-      - ./.stack
-      - dist
+    settings:
+      mount:
+        - ./.stack-work
+        - ./.stack
+        - dist
     volumes:
       - name: cache
-        path: /var/lib/cache
+        path: /cache
     when:
       branch: drone
