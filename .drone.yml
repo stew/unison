@@ -11,7 +11,7 @@ trigger:
 
 steps:
    - name: build
-     image: haskell:8.10-buster
+     image: registry.digitalocean.com/stewcasa/haskell-build:1
      commands:
       - stack build
       - stack test
