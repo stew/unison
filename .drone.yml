@@ -24,7 +24,7 @@ steps:
       event: [push, pull_request, tag, deployment]
 
   - name: deps
-    image: registry.digitalocean.com/stewcasa/haskell-build:1
+    image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
     commands:
@@ -32,7 +32,7 @@ steps:
       - stack build --test --only-dependencies
 
   - name: build
-    image: registry.digitalocean.com/stewcasa/haskell-build:1
+    image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
     commands:
