@@ -16,7 +16,7 @@ volumes:
     
 steps:
   - name: restore-cache
-    image: drillster/drone-volume-cache
+    image: plugins/drone-volume-cache
     settings:
       restore: true
       mount:
@@ -38,7 +38,7 @@ steps:
 
   - name: cache-deps
     group: post-build
-    image: drillster/drone-volume-cache
+    image: plugins/drone-volume-cache
     settings:
       rebuild: true
       mount:
@@ -63,7 +63,7 @@ steps:
 
   - name: cache-build
     group: post-build
-    image: drillster/drone-volume-cache
+    image: plugins/drone-volume-cache
     rebuild: true
     settings:
       mount:
