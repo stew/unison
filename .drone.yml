@@ -39,6 +39,10 @@ steps:
     settings:
       rebuild: true
       endpoint: https://drone-stack-cache.sfo3.digitaloceanspaces.com
+      access_key:
+        from_secret: SPACES_ACCESS_ID
+      secret_key:
+        from_secret: SPACES_SECRET_KEY
       mount:
         - .stack
         - .stack-work
