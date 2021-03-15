@@ -56,7 +56,7 @@ steps:
       - stack test
       - stack exec transcripts
 
-- volumes:
+volumes:
     - name: cache
       host:
         path: /tmp/cache
