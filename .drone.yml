@@ -16,15 +16,16 @@ volumes:
     
 steps:
   - name: restore-cache
-    image: plugins/s3-cache
+    image: plugins/drone-volume-cache
     settings:
       pull: true
       restore: true
-      endpoint: https://drone-stack-cache.sfo3.digitaloceanspaces.com
-      access_key:
-        from_secret: SPACES_ACCESS_ID
-      secret_key:
-        from_secret: SPACES_SECRET_KEY
+      mount:
+        - .stack
+        - .stack-work
+    volumes:
+      - name: cache
+        path: /cache
 
   - name: deps
     image: registry.digitalocean.com/stewcasa/haskell-build:2
@@ -35,19 +36,17 @@ steps:
 
   - name: cache-deps
     group: post-build
-    image: plugins/s3-cache
+    image: plugins/drone-volume-cache
     settings:
       rebuild: true
-      endpoint: https://drone-stack-cache.sfo3.digitaloceanspaces.com
-      access_key:
-        from_secret: SPACES_ACCESS_ID
-      secret_key:
-        from_secret: SPACES_SECRET_KEY
       mount:
         - .stack
         - .stack-work
       when:
         event: push
+    volumes:
+      - name: cache
+        path: /cache
 
   - name: build
     image: registry.digitalocean.com/stewcasa/haskell-build:2
