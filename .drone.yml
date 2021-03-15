@@ -48,6 +48,7 @@ steps:
       - name: cache
         path: /cache
 
+
   - name: build
     image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
