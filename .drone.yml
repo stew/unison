@@ -60,6 +60,20 @@ steps:
       - stack test
       - stack exec transcripts
 
+  - name: cache-build
+    group: post-build
+    image: drillster/drone-volume-cache
+    settings:
+      rebuild: true
+      mount:
+        - /drone/src/github.com/stew/unison/.stack
+        - /drone/src/github.com/stew/unison/.stack-work
+      when:
+        event: push
+    volumes:
+      - name: cache
+        path: /cache
+
 volumes:
     - name: cache
       host:
