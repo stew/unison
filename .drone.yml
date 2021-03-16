@@ -22,6 +22,7 @@ steps:
       restore: true
       mount:
         - /drone/src/github.com/stew/unison/.stack
+        - /drone/src/github.com/stew/unison/.stack-work
     volumes:
       - name: cache
         path: /cache
@@ -30,6 +31,7 @@ steps:
     image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
+      STACK_WORK: /drone/src/github.com/stew/unison/.stack-work
     commands:
       - stack build --test --only-dependencies
 
@@ -40,6 +42,7 @@ steps:
       rebuild: true
       mount:
         - /drone/src/github.com/stew/unison/.stack
+        - /drone/src/github.com/stew/unison/.stack-work
       when:
         event: push
     volumes:
@@ -51,6 +54,7 @@ steps:
     image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
+      STACK_WORK: /drone/src/github.com/stew/unison/.stack-work
     commands:
       - stack build
       - stack test
