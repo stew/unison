@@ -31,7 +31,6 @@ steps:
     image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-      STACK_WORK: /drone/src/github.com/stew/unison/.stack-work
     commands:
       - stack build --test --only-dependencies
 
@@ -54,7 +53,6 @@ steps:
     image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-      STACK_WORK: /drone/src/github.com/stew/unison/.stack-work
     commands:
       - stack build
       - stack test
