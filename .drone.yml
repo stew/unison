@@ -54,7 +54,7 @@ steps:
     image: registry.digitalocean.com/stewcasa/haskell-build:2
     environment:
       STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-      STACK_WORK: github.com/stew/unison/.stack
+      STACK_WORK: github.com/stew/unison/.stack-work
     commands:
       - stack build
       - stack test
@@ -66,6 +66,8 @@ steps:
     settings:
       rebuild: true
       mount:
+        - .stack
+        - .stack-work
         - /drone/src/github.com/stew/unison/.stack
         - /drone/src/github.com/stew/unison/.stack-work
       when:
