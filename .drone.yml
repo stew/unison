@@ -49,8 +49,6 @@ steps:
 
   - name: build
     image: registry.digitalocean.com/stewcasa/haskell-build:2
-    environment:
-      STACK_ROOT: /drone/src/github.com/stew/unison/.stack
     commands:
       - stack build
       - stack test
