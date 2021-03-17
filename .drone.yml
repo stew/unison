@@ -21,19 +21,16 @@ steps:
       pull: true
       restore: true
       mount:
-        - /drone/src/github.com/stew/unison/.stack
-        - /drone/src/github.com/stew/unison/.stack-work
+        - stack
     volumes:
       - name: cache
         path: /cache
 
   - name: deps
-    image: registry.digitalocean.com/stewcasa/haskell-build:2
-    environment:
-      STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-      STACK_WORK: github.com/stew/unison/.stack
+    image: registry.digitalocean.com/stewcasa/haskell-build:3
     commands:
-      - stack build --test --only-dependencies
+      - mkdir -p stack
+      - stack --stack-root $PWD/stack build --test --only-dependencies
 
   - name: cache-deps
     group: post-build
@@ -41,8 +38,7 @@ steps:
     settings:
       rebuild: true
       mount:
-        - /drone/src/github.com/stew/unison/.stack
-        - /drone/src/github.com/stew/unison/.stack-work
+        - stack
       when:
         event: push
     volumes:
@@ -51,14 +47,11 @@ steps:
 
 
   - name: build
-    image: registry.digitalocean.com/stewcasa/haskell-build:2
-    environment:
-      STACK_ROOT: /drone/src/github.com/stew/unison/.stack
-      STACK_WORK: github.com/stew/unison/.stack-work
+    image: registry.digitalocean.com/stewcasa/haskell-build:3
     commands:
-      - stack build
-      - stack test
-      - stack exec transcripts
+      - stack --stack-root $PWD/stack build
+      - stack --stack-root $PWD/stack test
+      - stack --stack-root $PWD/stack exec transcripts
 
   - name: cache-build
     group: post-build
@@ -66,10 +59,7 @@ steps:
     settings:
       rebuild: true
       mount:
-        - .stack
-        - .stack-work
-        - /drone/src/github.com/stew/unison/.stack
-        - /drone/src/github.com/stew/unison/.stack-work
+        - stack
       when:
         event: push
     volumes:
