@@ -26,6 +26,8 @@ steps:
   - name: deps
     image: registry.digitalocean.com/stewcasa/haskell-build:5
     volumes:
+      - name: root_home
+        path: /root
       - name: docker_sock
         path: /var/run/docker.sock
     commands:
