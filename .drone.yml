@@ -1,4 +1,4 @@
-
+---
 kind: pipeline
 type: docker
 name: default
@@ -9,11 +9,8 @@ trigger:
     - refs/pull/**
     - refs/tags/**
 
-volumes:
-  - name: cache
-    host:
-      path: /tmp/cache
-    
+
+
 steps:
   - name: restore-cache
     image: drillster/drone-volume-cache
@@ -27,10 +24,13 @@ steps:
         path: /cache
 
   - name: deps
-    image: registry.digitalocean.com/stewcasa/haskell-build:3
+    image: registry.digitalocean.com/stewcasa/haskell-build:5
+    volumes:
+      - name: docker_sock
+        path: /var/run/docker.sock
     commands:
       - mkdir -p stack
-      - stack --stack-root $PWD/stack build --test --only-dependencies
+      - stack --work-dir stack --stack-root $PWD/stack build --test --only-dependencies
 
   - name: cache-deps
     group: post-build
@@ -46,14 +46,14 @@ steps:
         path: /cache
 
   - name: build
-    image: registry.digitalocean.com/stewcasa/haskell-build:4
+    image: registry.digitalocean.com/stewcasa/haskell-build:5
     settings:
       mount:
         - stack
     commands:
-      - stack --stack-root $PWD/stack build
-      - stack --stack-root $PWD/stack test
-      - stack --stack-root $PWD/stack exec transcripts
+      - stack --work-dir stack --stack-root $PWD/stack build
+      - stack --work-dir stack --stack-root $PWD/stack test
+      - stack --work-dir stack --stack-root $PWD/stack exec transcripts
 
   - name: cache-build
     group: post-build
@@ -70,21 +70,25 @@ steps:
 
   - name: publish-build
     group: post-build
-    image: registry.digitalocean.com/stewcasa/haskell-build:4
-    settings:
-      mount:
-        - stack
+    image: registry.digitalocean.com/stewcasa/haskell-build:5
     commands:
-      - cd $(stack --stack-root $PWD/stackpath | awk '/local-install-root/{print $2}')/bin
+      - cd $(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin
       - mv unison ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
       - tar czf $ARCHIVE ucm
       - vault ssh -mode=ca -role=upload upload@172.18.0.8 of=$ARCHIVE < $ARCHIVE
+    volumes:
+      - name: root_home
+        path: /root
       
 volumes:
     - name: cache
       host:
         path: /tmp/cache2
-        
+    - name: docker_sock
+      host:
+        path: /var/run/docker.sock
 
-
+    - name: root_home
+      host:
+        path: /root
