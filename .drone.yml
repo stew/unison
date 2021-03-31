@@ -45,8 +45,14 @@ steps:
       - name: cache
         path: /cache
 
-
   - name: build
+    image: registry.digitalocean.com/stewcasa/haskell-build:3
+    commands:
+      - stack --stack-root $PWD/stack build
+      - stack --stack-root $PWD/stack test
+      - stack --stack-root $PWD/stack exec transcripts
+
+  - name: publish
     image: registry.digitalocean.com/stewcasa/haskell-build:3
     commands:
       - stack --stack-root $PWD/stack build
@@ -66,8 +72,20 @@ steps:
       - name: cache
         path: /cache
 
+  - name: publish-build
+    group: post-build
+    image: registry.digitalocean.com/stewcasa/haskell-build:3
+    commands:
+      - cd $(stack path | awk '/local-install-root/{print $2}')/bin
+      - mv unison ucm
+      - export ARCHIVE=unison-$(date +%F).tar.gz
+      - tar czf $ARCHIVE ucm
+      - vault ssh -mode=ca -role=upload upload@172.18.0.8 of=$ARCHIVE < $ARCHIVE
+      
 volumes:
     - name: cache
       host:
-        path: /tmp/cache
+        path: /tmp/cache2
         
+
+
