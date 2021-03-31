@@ -46,14 +46,10 @@ steps:
         path: /cache
 
   - name: build
-    image: registry.digitalocean.com/stewcasa/haskell-build:3
-    commands:
-      - stack --stack-root $PWD/stack build
-      - stack --stack-root $PWD/stack test
-      - stack --stack-root $PWD/stack exec transcripts
-
-  - name: publish
-    image: registry.digitalocean.com/stewcasa/haskell-build:3
+    image: registry.digitalocean.com/stewcasa/haskell-build:4
+    settings:
+      mount:
+        - stack
     commands:
       - stack --stack-root $PWD/stack build
       - stack --stack-root $PWD/stack test
@@ -74,9 +70,12 @@ steps:
 
   - name: publish-build
     group: post-build
-    image: registry.digitalocean.com/stewcasa/haskell-build:3
+    image: registry.digitalocean.com/stewcasa/haskell-build:4
+    settings:
+      mount:
+        - stack
     commands:
-      - cd $(stack path | awk '/local-install-root/{print $2}')/bin
+      - cd $(stack --stack-root $PWD/stackpath | awk '/local-install-root/{print $2}')/bin
       - mv unison ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
       - tar czf $ARCHIVE ucm
