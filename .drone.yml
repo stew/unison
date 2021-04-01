@@ -80,7 +80,7 @@ steps:
       - mv unison ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
       - tar czf $ARCHIVE ucm
-      - vault ssh -mode=ca -role=upload upload@172.18.0.8 of=$ARCHIVE < $ARCHIVE
+      - vault ssh -mode=ca -role=upload upload@172.18.0.8 dd of=$ARCHIVE < $ARCHIVE
     volumes:
       - name: root_home
         path: /root
