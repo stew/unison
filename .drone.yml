@@ -74,7 +74,7 @@ steps:
     group: post-build
     image: registry.digitalocean.com/stewcasa/haskell-build:5
     environment:
-      VAULT_ADDR: "http://vault.stew.casa:8200"
+      VAULT_ADDR: "https://vault.stew.casa:8200"
     commands:
       - cd $(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin
       - mv unison ucm
