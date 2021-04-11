@@ -1,5 +1,5 @@
 The Unison language
-======
+===================
 
 
 [![Build Status](http://drone.stew.casa/api/badges/stew/unison/status.svg)](http://drone.stew.casa/stew/unison)
@@ -24,7 +24,7 @@ If you'd like to learn more about the project, [this Strange Loop talk is a good
 We are currently alpha testing Unison. If you'd like to participate in alpha testing, you can go to [the docs site](https://www.unisonweb.org/docs) to get started.
 
 Building using Stack
------
+--------------------
 
 If these instructions don't work for you or are incomplete, please file an issue.
 
@@ -38,3 +38,14 @@ $ stack build && stack exec tests && stack exec unison
 ```
 
 See [`development.markdown`](development.markdown) for a list of build commands you'll likely use during development.
+
+Codebase Server
+---------------
+
+When `ucm` starts it starts a Codebase web server that is used by the 
+[Codebase UI](https://github.com/unisonweb/codebase-ui). It selects a random
+port and a unique token that most be used when starting the UI to correctly
+connect to the server.
+
+The port, host and token can all be configured by providing environment
+variables when starting `ucm`: `UCM_PORT`, `UCM_HOST`, and `UCM_TOKEN`.
