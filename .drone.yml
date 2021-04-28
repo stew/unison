@@ -22,7 +22,7 @@ steps:
         path: /cache
 
   - name: deps
-    image: registry.digitalocean.com/stewcasa/haskell-builder:19
+    image: registry.digitalocean.com/stewcasa/haskell-builder:20
     volumes:
       - name: root_home
         path: /root
@@ -46,7 +46,7 @@ steps:
         path: /cache
 
   - name: build
-    image: registry.digitalocean.com/stewcasa/haskell-builder:19
+    image: registry.digitalocean.com/stewcasa/haskell-builder:20
     settings:
       mount:
         - stack
@@ -70,7 +70,7 @@ steps:
 
   - name: publish-build
     group: post-build
-    image: registry.digitalocean.com/stewcasa/haskell-builder:19
+    image: registry.digitalocean.com/stewcasa/haskell-builder:20
     environment:
       VAULT_ADDR: "https://vault.stew.casa:8200"
     commands:
