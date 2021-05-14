@@ -78,6 +78,7 @@ steps:
       - mv unison ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
       - tar czf $ARCHIVE ucm
+      - vault login -method=cert -client-cert=/root/host_crt.pem -client-key=/etc/host_key.pem
       - vault ssh -mode=ca -role=repo repo@hub.private.unison-lang.org dd of=upload/$ARCHIVE < $ARCHIVE
     volumes:
       - name: root_home
