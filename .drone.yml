@@ -79,7 +79,9 @@ steps:
       - mkdir ${UCM_BUILD_DIR}/ui
       - cp $UCM ${UCM_BUILD_DIR}/ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
-      - curl https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip | unzip - -d ${UCM_BUILD_DIR}/ui
+      - wget -O/tmp/ucm.zip https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip
+      - cd $UCM_BUILD_DIR/ui
+      - unzip /tmp/ucm.zip
       - tar -c -z -f $ARCHIVE -C ${UCM_BUILD_DIR} ucm
       - vault login -method=cert -client-cert=/root/host_crt.pem -client-key=/root/host_key.pem 2>&1 > /dev/null
       - which ssh
