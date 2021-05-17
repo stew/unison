@@ -77,7 +77,7 @@ steps:
       - UCM=$(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin/unison
       - UCM_BUILD_DIR=$(mktemp -d)
       - mkdir ${UCM_BUILD_DIR}/ui
-      - copy $UCM ${UCM_BUILD_DIR}/ucm
+      - cp $UCM ${UCM_BUILD_DIR}/ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
       - curl https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip | unzip -d ${UCM_BUILD_DIR}/ui
       - tar -c -z -f $ARCHIVE -C ${UCM_BUILD_DIR} ucm
