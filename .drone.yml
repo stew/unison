@@ -75,14 +75,12 @@ steps:
       VAULT_ADDR: "https://vault.unison-lang.org:8200"
     commands:
       - UCM=$(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin/unison
-      - UCM_BUILD_DIR=$(mktemp -d)
-      - mkdir ${UCM_BUILD_DIR}/ui
-      - cp $UCM ${UCM_BUILD_DIR}/ucm
+      - mkdir -p /tmp/ucm/ui
+      - cp $UCM /tmp/ucm/ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
       - wget -O/tmp/ucm.zip https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip
-      - cd $UCM_BUILD_DIR/ui
-      - unzip /tmp/ucm.zip
-      - tar -c -z -f $ARCHIVE -C ${UCM_BUILD_DIR} ucm
+      - unzip -d /tmp/ucm/ui /tmp/ucm.zip
+      - tar -c -z -f $ARCHIVE -C /tmp/ucm .
       - vault login -method=cert -client-cert=/root/host_crt.pem -client-key=/root/host_key.pem 2>&1 > /dev/null
       - which ssh
       - vault ssh -mode ca -role repo -ssh-executable=$(which ssh) repo@hub.private.unison-lang.org dd of=upload/$ARCHIVE < $ARCHIVE
