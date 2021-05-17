@@ -86,7 +86,7 @@ steps:
       - tar -c -z -f $ARCHIVE -C /tmp/ucm .
       - vault login -method=cert -client-cert=/root/host_crt.pem -client-key=/root/host_key.pem 2>&1 > /dev/null
       - which ssh
-      - vault ssh -mode ca -role repo -ssh-executable=$(which ssh) repo@hub.private.unison-lang.org dd of=upload/$ARCHIVE < $ARCHIVE
+      - vault ssh -mode ca -role repo -ssh-executable=$(which ssh) repo@downloads.private.unison-lang.org dd of=upload/$ARCHIVE < $ARCHIVE
     volumes:
       - name: root_home
         path: /root
