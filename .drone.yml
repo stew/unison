@@ -22,7 +22,7 @@ steps:
         path: /cache
 
   - name: deps
-    image: registry.digitalocean.com/unison-lang/haskell-builder:9
+    image: registry.digitalocean.com/unison-lang/haskell-builder:11
     volumes:
       - name: root_home
         path: /root
@@ -46,7 +46,7 @@ steps:
         path: /cache
 
   - name: build
-    image: registry.digitalocean.com/unison-lang/haskell-builder:9
+    image: registry.digitalocean.com/unison-lang/haskell-builder:11
     settings:
       mount:
         - stack
@@ -70,14 +70,17 @@ steps:
 
   - name: publish-build
     group: post-build
-    image: registry.digitalocean.com/unison-lang/haskell-builder:9
+    image: registry.digitalocean.com/unison-lang/haskell-builder:11
     environment:
       VAULT_ADDR: "https://vault.unison-lang.org:8200"
     commands:
-      - cd $(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin
-      - mv unison ucm
+      - UCM=$(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin/unison
+      - UCM_BUILD_DIR=$(mktemp -d)
+      - mkdir ${UCM_BUILD_DIR}/ui
+      - copy $UCM ${UCM_BUILD_DIR}/ucm
       - export ARCHIVE=unison-$(date +%F).tar.gz
-      - tar czf $ARCHIVE ucm
+      - curl https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip | unzip -d ${UCM_BUILD_DIR}/ui
+      - tar -c -z -f $ARCHIVE -C ${UCM_BUILD_DIR} ucm
       - vault login -method=cert -client-cert=/root/host_crt.pem -client-key=/root/host_key.pem 2>&1 > /dev/null
       - which ssh
       - vault ssh -mode ca -role repo -ssh-executable=$(which ssh) repo@hub.private.unison-lang.org dd of=upload/$ARCHIVE < $ARCHIVE
