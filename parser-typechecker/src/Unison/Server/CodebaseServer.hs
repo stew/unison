@@ -6,110 +6,133 @@
 
 module Unison.Server.CodebaseServer where
 
-import           Data.Aeson                     ( )
-import qualified Data.ByteString.Lazy          as Lazy
-import qualified Data.ByteString               as Strict
-import qualified Data.ByteString.Char8         as C8
-import           Data.OpenApi                   ( URL(..)
-                                                , Info(..)
-                                                , License(..)
-                                                , OpenApi
-                                                )
-import           Data.Proxy                     ( Proxy(..) )
-import           GHC.Generics                   ( )
-import           Network.HTTP.Types.Status      ( ok200 )
-import           Network.Wai                    ( responseLBS
-                                                , Request
-                                                , queryString
-                                                )
-import           Network.Wai.Handler.Warp       ( withApplicationSettings
-                                                , runSettings
-                                                , defaultSettings
-                                                , Port
-                                                , setPort
-                                                , setHost
-                                                )
-import           Servant.API                    (Headers,  Get
-                                                , JSON
-                                                , Raw
-                                                , (:>)
-                                                , type (:<|>)(..)
-                                                )
-import           Servant.API.Experimental.Auth  ( AuthProtect )
-import           Servant.Server.Experimental.Auth
-                                                ( AuthHandler
-                                                , AuthServerData
-                                                , mkAuthHandler
-                                                )
-import           Servant.Docs                   ( DocIntro(DocIntro)
-                                                , docsWithIntros
-                                                , markdown
-                                                )
-import           Servant.Server                 ( Application
-                                                , Context(..)
-                                                , Server
-                                                , ServerError(..)
-                                                , Tagged(Tagged)
-                                                , err401
-                                                )
-import           Unison.Codebase                ( Codebase )
-import           Unison.Parser                  ( Ann )
-import           Unison.Server.Endpoints.ListNamespace
-                                                ( NamespaceAPI
-                                                , serveNamespace
-                                                )
-import           Unison.Server.Endpoints.GetDefinitions
-                                                ( DefinitionsAPI
-                                                , serveDefinitions
-                                                )
-import           Unison.Server.Types            ( mungeString )
-import           Unison.Var                     ( Var )
-import           Servant.OpenApi                ( HasOpenApi(toOpenApi) )
-import           Servant                        ( Header
-                                                , addHeader
-                                                , throwError
-                                                , serveWithContext
-                                                )
-import           Control.Lens                   ( (&)
-                                                , (.~)
-                                                )
-import           Data.OpenApi.Lens              ( info )
-import qualified Data.Text                     as Text
-import           Text.Read                      (readMaybe)
-import           Data.Foldable                  ( Foldable(toList) )
-import           System.Environment             (lookupEnv)
-import           System.Random.Stateful         ( getStdGen
-                                                , newAtomicGenM
-                                                , uniformByteStringM
-                                                )
-import qualified Data.ByteString.Base64        as Base64
-import           Data.String                    (fromString)
+import Control.Applicative
+import Control.Concurrent (newEmptyMVar, putMVar, readMVar)
+import Control.Concurrent.Async (race)
+import Control.Exception (ErrorCall (..), throwIO)
+import Control.Lens ((&), (.~))
+import Control.Monad.IO.Class (liftIO)
+import Data.Aeson ()
+import qualified Data.ByteString as Strict
+import qualified Data.ByteString.Base64 as Base64
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString.Lazy.UTF8 as BLU
+import Data.Foldable (Foldable (toList))
+import Data.Maybe (fromMaybe)
+import Data.Monoid (Endo (..), appEndo)
+import Data.OpenApi (Info (..), License (..), OpenApi, URL (..))
+import qualified Data.OpenApi.Lens as OpenApi
+import Data.Proxy (Proxy (..))
+import Data.String (fromString)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import GHC.Generics ()
+import Network.HTTP.Media ((//), (/:))
+import Network.HTTP.Types.Status (ok200)
+import Network.Wai (responseLBS)
+import Network.Wai.Handler.Warp
+  ( Port,
+    defaultSettings,
+    runSettings,
+    setBeforeMainLoop,
+    setHost,
+    setPort,
+    withApplicationSettings,
+  )
+import Options.Applicative
+  ( auto,
+    defaultPrefs,
+    execParserPure,
+    forwardOptions,
+    getParseResult,
+    help,
+    info,
+    long,
+    metavar,
+    option,
+    strOption,
+  )
+import Servant
+  ( Header,
+    MimeRender (..),
+    addHeader,
+    serve,
+    throwError,
+  )
+import Servant.API
+  ( Accept (..),
+    Capture,
+    CaptureAll,
+    Get,
+    Headers,
+    JSON,
+    Raw,
+    (:>),
+    type (:<|>) (..),
+  )
+import Servant.Docs (DocIntro (DocIntro), docsWithIntros, markdown)
+import Servant.OpenApi (HasOpenApi (toOpenApi))
+import Servant.Server
+  ( Application,
+    Handler,
+    Server,
+    ServerError (..),
+    Tagged (Tagged),
+    err401,
+    err404,
+  )
+import Servant.Server.StaticFiles (serveDirectoryWebApp)
+import System.Directory (doesFileExist)
+import System.Environment (getArgs, lookupEnv)
+import System.FilePath.Posix ((</>))
+import System.Random.Stateful (getStdGen, newAtomicGenM, uniformByteStringM)
+import Text.Read (readMaybe)
+import Unison.Codebase (Codebase)
+import Unison.Parser (Ann)
+import Unison.Server.Endpoints.FuzzyFind (FuzzyFindAPI, serveFuzzyFind)
+import Unison.Server.Endpoints.GetDefinitions
+  ( DefinitionsAPI,
+    serveDefinitions,
+  )
+import Unison.Server.Endpoints.ListNamespace (NamespaceAPI, serveNamespace)
+import Unison.Server.Types (mungeString)
+import Unison.Var (Var)
+
+-- HTML content type
+data HTML = HTML
+
+newtype RawHtml = RawHtml { unRaw :: Lazy.ByteString }
+
+instance Accept HTML where
+  contentType _ = "text" // "html" /: ("charset", "utf-8")
+
+instance MimeRender HTML RawHtml where
+  mimeRender _ = unRaw
 
 type OpenApiJSON = "openapi.json"
   :> Get '[JSON] (Headers '[Header "Access-Control-Allow-Origin" String] OpenApi)
 
-type DocAPI = AuthProtect "token-auth" :> (UnisonAPI :<|> OpenApiJSON :<|> Raw)
+type DocAPI = UnisonAPI :<|> OpenApiJSON :<|> Raw
 
-type UnisonAPI = NamespaceAPI :<|> DefinitionsAPI
+type UnisonAPI = NamespaceAPI :<|> DefinitionsAPI :<|> FuzzyFindAPI
 
-type instance AuthServerData (AuthProtect "token-auth") = ()
+type WebUI = CaptureAll "route" Text :> Get '[HTML] RawHtml
 
-genAuthServerContext
-  :: Strict.ByteString -> Context (AuthHandler Request ()': '[])
-genAuthServerContext token = authHandler token :. EmptyContext
+type ServerAPI = ("ui" :> WebUI) :<|> ("api" :> DocAPI)
 
-authHandler :: Strict.ByteString -> AuthHandler Request ()
-authHandler token = mkAuthHandler handler
- where
-  throw401 msg = throwError $ err401 { errBody = msg }
-  handler req =
-    maybe (throw401 "Authentication token missing or incorrect")
-          (const $ pure ())
-      . lookup token
-      $ queryString req
+type AuthedServerAPI = ("static" :> Raw) :<|> (Capture "token" Text :> ServerAPI)
+
+handleAuth :: Strict.ByteString -> Text -> Handler ()
+handleAuth expectedToken gotToken =
+  if Text.decodeUtf8 expectedToken == gotToken
+    then pure ()
+    else throw401 "Authentication token missing or incorrect."
+  where throw401 msg = throwError $ err401 { errBody = msg }
 
 openAPI :: OpenApi
-openAPI = toOpenApi api & info .~ infoObject
+openAPI = toOpenApi api & OpenApi.info .~ infoObject
 
 infoObject :: Info
 infoObject = mempty
@@ -133,9 +156,17 @@ docAPI = Proxy
 api :: Proxy UnisonAPI
 api = Proxy
 
-app :: Var v => Codebase IO v Ann -> Strict.ByteString -> Application
-app codebase token =
-  serveWithContext docAPI (genAuthServerContext token) $ server codebase
+serverAPI :: Proxy AuthedServerAPI
+serverAPI = Proxy
+
+app
+  :: Var v
+  => Codebase IO v Ann
+  -> Maybe FilePath
+  -> Strict.ByteString
+  -> Application
+app codebase uiPath expectedToken =
+  serve serverAPI $ server codebase uiPath expectedToken
 
 genToken :: IO Strict.ByteString
 genToken = do
@@ -143,36 +174,157 @@ genToken = do
   g   <- newAtomicGenM gen
   Base64.encode <$> uniformByteStringM 24 g
 
+data Waiter a
+  = Waiter {
+    notify :: a -> IO (),
+    waitFor :: IO a
+  }
+
+mkWaiter :: IO (Waiter a)
+mkWaiter = do
+  mvar <- newEmptyMVar
+  return Waiter {
+    notify = putMVar mvar,
+    waitFor = readMVar mvar
+  }
+
+ucmUIVar :: String
+ucmUIVar = "UCM_WEB_UI"
+
+ucmPortVar :: String
+ucmPortVar = "UCM_PORT"
+
+ucmHostVar :: String
+ucmHostVar = "UCM_HOST"
+
+ucmTokenVar :: String
+ucmTokenVar = "UCM_TOKEN"
+
 -- The auth token required for accessing the server is passed to the function k
 start
-  :: Var v => Codebase IO v Ann -> (Strict.ByteString -> Port -> IO ()) -> IO ()
+  :: Var v
+  => Codebase IO v Ann
+  -> (Strict.ByteString -> Port -> IO ())
+  -> IO ()
 start codebase k = do
-  envToken <- lookupEnv "UCM_TOKEN"
-  envHost <- lookupEnv "UCM_HOST"
-  envPort <- (readMaybe =<<) <$> lookupEnv "UCM_PORT"
+  envToken <- lookupEnv ucmTokenVar
+  envHost  <- lookupEnv ucmHostVar
+  envPort  <- (readMaybe =<<) <$> lookupEnv ucmPortVar
+  envUI    <- lookupEnv ucmUIVar
+  args     <- getArgs
+  let
+    p =
+      (,,,)
+        <$> (   (<|> envToken)
+            <$> (  optional
+                .  strOption
+                $  long "token"
+                <> metavar "STRING"
+                <> help "API auth token"
+                )
+            )
+        <*> (   (<|> envHost)
+            <$> (  optional
+                .  strOption
+                $  long "host"
+                <> metavar "STRING"
+                <> help "UCM server host"
+                )
+            )
+        <*> (   (<|> envPort)
+            <$> (  optional
+                .  option auto
+                $  long "port"
+                <> metavar "NUMBER"
+                <> help "UCM server port"
+                )
+            )
+        <*> (   (<|> envUI)
+            <$> (optional . strOption $ long "ui" <> metavar "DIR" <> help
+                  "Path to codebase ui root"
+                )
+            )
+    mayOpts =
+      getParseResult $ execParserPure defaultPrefs (info p forwardOptions) args
+  case mayOpts of
+    Just (token, host, port, ui) -> startServer codebase k token host port ui
+    Nothing -> startServer codebase k Nothing Nothing Nothing Nothing
+
+startServer
+  :: Var v
+  => Codebase IO v Ann
+  -> (Strict.ByteString -> Port -> IO ())
+  -> Maybe String
+  -> Maybe String
+  -> Maybe Port
+  -> Maybe String
+  -> IO ()
+startServer codebase k envToken envHost envPort envUI = do
   token <- case envToken of
     Just t -> return $ C8.pack t
-    _ -> genToken
-
-  let settings = case envHost of
-        Just p -> setHost (fromString p) defaultSettings
-        _ -> defaultSettings
-      a = app codebase token
-
+    _      -> genToken
+  let settings = appEndo
+        (  foldMap (Endo . setPort)              envPort
+        <> foldMap (Endo . setHost . fromString) envHost
+        )
+        defaultSettings
+      a = app codebase envUI token
   case envPort of
-    Just p -> do
-      (k token p)
-      runSettings (setPort p settings) a
-    Nothing ->
-      withApplicationSettings settings (pure a) (k token)
+    Nothing -> withApplicationSettings settings (pure a) (k token)
+    Just p  -> do
+      started <- mkWaiter
+      let settings' = setBeforeMainLoop (notify started ()) settings
+      result <- race (runSettings settings' a)
+                     (waitFor started *> k token p)
+      case result of
+        Left  () -> throwIO $ ErrorCall "Server exited unexpectedly!"
+        Right x  -> pure x
 
-server :: Var v => Codebase IO v Ann -> Server DocAPI
-server codebase _ =
-  (serveNamespace codebase :<|> serveDefinitions codebase)
-    :<|> addHeader "*"
-    <$>  serveOpenAPI
-    :<|> Tagged serveDocs
+serveIndex :: FilePath -> Handler RawHtml
+serveIndex path = do
+  let index = path </> "index.html"
+  exists <- liftIO $ doesFileExist index
+  if exists
+    then fmap RawHtml . liftIO . Lazy.readFile $ path </> "index.html"
+    else fail
+ where
+  fail = throwError $ err404
+    { errBody =
+      BLU.fromString
+      $  "No codebase UI configured."
+      <> " Set the "
+      <> ucmUIVar
+      <> " environment variable to the directory where the UI is installed."
+    }
+
+serveUI :: Handler () -> Maybe FilePath -> Server WebUI
+serveUI tryAuth p _ =
+  let path = fromMaybe "ui" p
+  in  tryAuth *> serveIndex path
+
+server
+  :: Var v
+  => Codebase IO v Ann
+  -> Maybe FilePath
+  -> Strict.ByteString
+  -> Server AuthedServerAPI
+server codebase uiPath token =
+  serveDirectoryWebApp (fromMaybe "ui" uiPath </> "static")
+    :<|> ((\t ->
+            serveUI (tryAuth t) uiPath
+              :<|> (    (    (serveNamespace (tryAuth t) codebase)
+                        :<|> (serveDefinitions (tryAuth t) codebase)
+                        :<|> (serveFuzzyFind (tryAuth t) codebase)
+                        )
+                   :<|> addHeader "*"
+                   <$>  serveOpenAPI
+                   :<|> Tagged serveDocs
+                   )
+          )
+         )
  where
   serveDocs _ respond = respond $ responseLBS ok200 [plain] docsBS
   serveOpenAPI = pure openAPI
   plain        = ("Content-Type", "text/plain")
+  tryAuth      = handleAuth token
+

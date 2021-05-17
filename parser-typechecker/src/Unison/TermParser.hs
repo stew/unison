@@ -361,7 +361,138 @@ termLeaf =
     , delayQuote
     , bang
     , docBlock
+    , doc2Block
     ]
+
+-- Syntax for documentation v2 blocks, which are surrounded by {{ }}.
+-- The lexer does most of the heavy lifting so there's not a lot for
+-- the parser to do. For instance, in
+--
+--   {{
+--   Hi there!
+--
+--   goodbye.
+--   }}
+--
+-- the lexer will produce:
+--
+-- [Open "syntax.docUntitledSection",
+--    Open "syntax.docParagraph",
+--      Open "syntax.docWord", Textual "Hi", Close,
+--      Open "syntax.docWord", Textual "there!", Close,
+--    Close
+--    Open "syntax.docParagraph",
+--      Open "syntax.docWord", Textual "goodbye", Close,
+--    Close
+--  Close]
+--
+-- The parser will parse this into the Unison expression:
+--
+--   syntax.docUntitledSection [
+--     syntax.docParagraph [syntax.docWord "Hi", syntax.docWord "there!"],
+--     syntax.docParagraph [syntax.docWord "goodbye"]
+--   ]
+--
+-- Where `syntax.doc{Paragraph, UntitledSection,...}` are all ordinary term
+-- variables that will be looked up in the environment like anything else. This
+-- means that the documentation syntax can have its meaning changed by
+-- overriding what functions the names `syntax.doc*` correspond to.
+doc2Block :: forall v . Var v => TermP v
+doc2Block =
+  P.lookAhead (openBlockWith "syntax.docUntitledSection") *> elem
+  where
+  elem :: TermP v
+  elem = text <|> do
+    t <- openBlock
+    let
+      -- here, `t` will be something like `Open "syntax.docWord"`
+      -- so `f` will be a term var with the name "syntax.docWord".
+      f = f' t
+      f' t = Term.var (ann t) (Var.nameds (L.payload t))
+
+      -- follows are some common syntactic forms used for parsing child elements
+
+      -- regular is parsed into `f child1 child2 child3` for however many children
+      regular = do
+        cs <- P.many elem <* closeBlock
+        pure $ Term.apps' f cs
+
+      -- variadic is parsed into: `f [child1, child2, ...]`
+      variadic = variadic' f
+      variadic' f = do
+        cs <- P.many elem <* closeBlock
+        pure $ Term.apps' f [Term.list (ann cs) cs]
+
+      -- sectionLike is parsed into: `f tm [child1, child2, ...]`
+      sectionLike = do
+        arg1 <- elem
+        cs <- P.many elem <* closeBlock
+        pure $ Term.apps' f [arg1, Term.list (ann cs) cs]
+
+      evalLike wrap = do
+        tm <- term <* closeBlock
+        pure $ Term.apps' f [wrap tm]
+
+      -- converts `tm` to `'tm`
+      --
+      -- Embedded examples like ``1 + 1`` are represented as terms,
+      -- but are wrapped in delays so they are left unevaluated for the
+      -- code which renders documents. (We want the doc display to get
+      -- the unevaluated expression `1 + 1` and not `2`)
+      addDelay tm = Term.delay (ann tm) tm
+
+    case L.payload t of
+      "syntax.docJoin" -> variadic
+      "syntax.docUntitledSection" -> variadic
+      "syntax.docColumn" -> variadic
+      "syntax.docParagraph" -> variadic
+      "syntax.docSignature" -> variadic
+      "syntax.docSource" -> variadic
+      "syntax.docFoldedSource" -> variadic
+      "syntax.docBulletedList" -> variadic
+      "syntax.docSourceAnnotations" -> variadic
+      "syntax.docSourceElement" -> do
+        link <- elem
+        anns <- P.optional $ reserved "@" *> elem
+        closeBlock $> Term.apps' f [link, fromMaybe (Term.list (ann link) mempty) anns]
+      "syntax.docNumberedList" -> do
+        nitems@((n,_):_) <- P.some nitem <* closeBlock
+        let items = snd <$> nitems
+        pure $ Term.apps' f [n, Term.list (ann items) items]
+        where
+          nitem = do
+            n <- number
+            t <- openBlockWith "syntax.docColumn"
+            let f = f' ("syntax.docColumn" <$ t)
+            child <- variadic' f
+            pure (n, child)
+      "syntax.docSection" -> sectionLike
+      -- @source{ type Blah, foo, type Bar }
+      "syntax.docEmbedTermLink" -> do
+        tm <- addDelay <$> (hashQualifiedPrefixTerm <|> hashQualifiedInfixTerm)
+        closeBlock $> Term.apps' f [tm]
+      "syntax.docEmbedSignatureLink" -> do
+        tm <- addDelay <$> (hashQualifiedPrefixTerm <|> hashQualifiedInfixTerm)
+        closeBlock $> Term.apps' f [tm]
+      "syntax.docEmbedTypeLink" -> do
+        r <- typeLink'
+        closeBlock $> Term.apps' f [Term.typeLink (ann r) (L.payload r)]
+      "syntax.docExample" -> (term <* closeBlock) <&> \case
+        tm@(Term.Apps' _ xs) ->
+          let fvs = List.Extra.nubOrd $ concatMap (toList . Term.freeVars) xs
+              n = Term.nat (ann tm) (fromIntegral (length fvs))
+              lam = addDelay $ Term.lam' (ann tm) fvs tm
+          in  Term.apps' f [n, lam]
+        tm -> Term.apps' f [Term.nat (ann tm) 0, addDelay tm]
+      "syntax.docTransclude" -> evalLike id
+      "syntax.docEvalInline" -> evalLike addDelay
+      "syntax.docExampleBlock" -> do
+        tm <- block'' False True "syntax.docExampleBlock" (pure (void t)) closeBlock
+        pure $ Term.apps' f [Term.nat (ann tm) 0, addDelay tm]
+      "syntax.docEval" -> do
+        tm <- block' False "syntax.docEval" (pure (void t)) closeBlock
+        pure $ Term.apps' f [addDelay tm]
+      _ -> regular
 
 docBlock :: Var v => TermP v
 docBlock = do
@@ -835,6 +966,11 @@ data BlockElement v
   | DestructuringBind (Ann, Term v Ann -> Term v Ann)
   | Action (Term v Ann)
 
+instance Show v => Show (BlockElement v) where
+  show (Binding ((pos,name), _)) = show ("binding: ", pos, name)
+  show (DestructuringBind (pos, _)) = show ("destructuring bind: ", pos)
+  show (Action tm) = show ("action: ", ann tm)
+
 -- subst
 -- use Foo.Bar + blah
 -- use Bar.Baz zonk zazzle
@@ -856,15 +992,19 @@ substImports ns imports =
   Term.substTypeVars [ (suffix, Type.var () full)
     | (suffix, full) <- imports, Names.hasTypeNamed (Name.fromVar full) ns ]
 
-block'
+block' :: Var v => IsTop -> String -> P v (L.Token ()) -> P v b -> TermP v
+block' isTop = block'' isTop False
+
+block''
   :: forall v b
    . Var v
   => IsTop
+  -> Bool -- `True` means insert `()` at end of block if it ends with a statement
   -> String
   -> P v (L.Token ())
   -> P v b
   -> TermP v
-block' isTop s openBlock closeBlock = do
+block'' isTop implicitUnitAtEnd s openBlock closeBlock = do
     open <- openBlock
     (names, imports) <- imports
     _ <- optional semi
@@ -880,8 +1020,8 @@ block' isTop s openBlock closeBlock = do
             Left dups -> customFailure $ DuplicateTermNames (toList dups)
             Right tm -> pure tm
           toTm bs = do
-            body <- body bs
-            finish $ foldr step body (init bs)
+            (bs, body) <- body bs
+            finish $ foldr step body bs
             where
             step :: BlockElement v -> Term v Ann -> Term v Ann
             step elem body = case elem of
@@ -898,10 +1038,12 @@ block' isTop s openBlock closeBlock = do
               DestructuringBind (_, f) -> f body
           body bs = case reverse bs of
             Binding ((a, _v), _) : _ -> pure $
-              Term.var a (positionalVar a Var.missingResult)
-            Action e : _ -> pure e
+              if implicitUnitAtEnd then (bs, DD.unitTerm a)
+              else (bs, Term.var a (positionalVar a Var.missingResult))
+            Action e : bs -> pure (reverse bs, e)
             DestructuringBind (a, _) : _ -> pure $
-              Term.var a (positionalVar a Var.missingResult)
+              if implicitUnitAtEnd then (bs, DD.unitTerm a)
+              else (bs, Term.var a (positionalVar a Var.missingResult))
             [] -> customFailure $ EmptyBlock (const s <$> open)
         in toTm bs
 

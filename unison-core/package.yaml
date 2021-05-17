@@ -1,4 +1,4 @@
-name: unison-core
+name: unison-core1
 github: unisonweb/unison
 copyright: Copyright (C) 2013-2018 Unison Computing, PBC and contributors
 
@@ -12,6 +12,7 @@ library:
     - cryptonite
     - either
     - extra
+    - fuzzyfind
     - lens
     - prelude-extras
     - memory

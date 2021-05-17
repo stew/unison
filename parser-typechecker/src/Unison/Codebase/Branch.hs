@@ -7,6 +7,7 @@
 module Unison.Codebase.Branch
   ( -- * Branch types
     Branch(..)
+  , UnwrappedBranch
   , Branch0(..)
   , MergeMode(..)
   , Raw(..)
@@ -31,6 +32,7 @@ module Unison.Codebase.Branch
   , head
   , headHash
   , before
+  , before'
   , findHistoricalHQs
   , findHistoricalRefs
   , findHistoricalRefs'
@@ -41,6 +43,7 @@ module Unison.Codebase.Branch
   , uncons
   , merge
   , merge'
+  , merge''
 
     -- * Branch children
     -- ** Children lenses
@@ -144,7 +147,7 @@ import           Unison.Referent                ( Referent )
 import qualified Unison.Referent               as Referent
 import qualified Unison.Reference              as Reference
 
-import qualified Unison.Util.Cache             as Cache
+import qualified U.Util.Cache             as Cache
 import qualified Unison.Util.Relation          as R
 import           Unison.Util.Relation            ( Relation )
 import qualified Unison.Util.Relation4         as R4
@@ -160,8 +163,9 @@ import Unison.LabeledDependency (LabeledDependency)
 
 -- | A node in the Unison namespace hierarchy
 -- along with its history.
-newtype Branch m = Branch { _history :: Causal m Raw (Branch0 m) }
+newtype Branch m = Branch { _history :: UnwrappedBranch m }
   deriving (Eq, Ord)
+type UnwrappedBranch m = Causal m Raw (Branch0 m)
 
 type Hash = Causal.RawHash Raw
 type EditHash = Hash.Hash
@@ -378,17 +382,26 @@ discardHistory0 = over children (fmap tweak) where
   tweak b = cons (discardHistory0 (head b)) empty
 
 merge' :: forall m . Monad m => MergeMode -> Branch m -> Branch m -> m (Branch m)
-merge' _ b1 b2 | isEmpty b1 = pure b2
-merge' mode b1 b2 | isEmpty b2 = case mode of
+merge' = merge'' lca
+
+merge'' :: forall m . Monad m
+        => (Branch m -> Branch m -> m (Maybe (Branch m))) -- lca calculator
+        -> MergeMode
+        -> Branch m
+        -> Branch m
+        -> m (Branch m)
+merge'' _ _ b1 b2      | isEmpty b1 = pure b2
+merge'' _ mode b1 b2 | isEmpty b2 = case mode of
   RegularMerge -> pure b1
   SquashMerge -> pure $ cons (discardHistory0 (head b1)) b2
-merge' mode (Branch x) (Branch y) =
+merge'' lca mode (Branch x) (Branch y) =
   Branch <$> case mode of
-               RegularMerge -> Causal.threeWayMerge combine x y
+               RegularMerge -> Causal.threeWayMerge' lca' combine x y
                SquashMerge  -> Causal.squashMerge combine x y
  where
+  lca' c1 c2 = fmap _history <$> lca (Branch c1) (Branch c2)
   combine :: Maybe (Branch0 m) -> Branch0 m -> Branch0 m -> m (Branch0 m)
-  combine Nothing l r = merge0 mode l r
+  combine Nothing l r = merge0 lca mode l r
   combine (Just ca) l r = do
     dl <- diff0 ca l
     dr <- diff0 ca r
@@ -396,7 +409,7 @@ merge' mode (Branch x) (Branch y) =
     children <- Map.mergeA
                   (Map.traverseMaybeMissing $ combineMissing ca)
                   (Map.traverseMaybeMissing $ combineMissing ca)
-                  (Map.zipWithAMatched $ const (merge' mode))
+                  (Map.zipWithAMatched $ const (merge'' lca mode))
                   (_children l) (_children r)
     pure $ branch0 (_terms head0) (_types head0) children (_edits head0)
 
@@ -404,7 +417,7 @@ merge' mode (Branch x) (Branch y) =
     case Map.lookup k (_children ca) of
       Nothing -> pure $ Just cur
       Just old -> do
-        nw <- merge' mode (cons empty0 old) cur
+        nw <- merge'' lca mode (cons empty0 old) cur
         if isEmpty0 $ head nw
         then pure Nothing
         else pure $ Just nw
@@ -432,13 +445,22 @@ merge' mode (Branch x) (Branch y) =
           }
     pure (H.accumulate' np, pure np)
 
+-- `before' lca b1 b2` is true if `b2` incorporates all of `b1`
+-- It's defined as: lca b1 b2 == Just b1
+before' :: Monad m => (Branch m -> Branch m -> m (Maybe (Branch m)))
+                   -> Branch m -> Branch m -> m Bool
+before' lca (Branch x) (Branch y) = Causal.before' lca' x y
+  where
+    lca' c1 c2 = fmap _history <$> lca (Branch c1) (Branch c2)
+
 -- `before b1 b2` is true if `b2` incorporates all of `b1`
 before :: Monad m => Branch m -> Branch m -> m Bool
-before (Branch x) (Branch y) = Causal.before x y
+before (Branch b1) (Branch b2) = Causal.before b1 b2
 
-merge0 :: forall m. Monad m => MergeMode -> Branch0 m -> Branch0 m -> m (Branch0 m)
-merge0 mode b1 b2 = do
-  c3 <- unionWithM (merge' mode) (_children b1) (_children b2)
+merge0 :: forall m. Monad m => (Branch m -> Branch m -> m (Maybe (Branch m)))
+                            -> MergeMode -> Branch0 m -> Branch0 m -> m (Branch0 m)
+merge0 lca mode b1 b2 = do
+  c3 <- unionWithM (merge'' lca mode) (_children b1) (_children b2)
   e3 <- unionWithM g (_edits b1) (_edits b2)
   pure $ branch0 (_terms b1 <> _terms b2)
                  (_types b1 <> _types b2)
@@ -488,7 +510,7 @@ numHashChars _b = 3
 
 -- This type is a little ugly, so we wrap it up with a nice type alias for
 -- use outside this module.
-type Cache m = Cache.Cache m (Causal.RawHash Raw) (Causal m Raw (Branch0 m))
+type Cache m = Cache.Cache m (Causal.RawHash Raw) (UnwrappedBranch m)
 
 boundedCache :: MonadIO m => Word -> m (Cache m)
 boundedCache = Cache.semispaceCache

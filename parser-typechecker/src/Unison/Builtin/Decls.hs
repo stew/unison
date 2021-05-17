@@ -1,38 +1,39 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Unison.Builtin.Decls where
 
-import           Data.List                      ( elemIndex, find )
-import qualified Data.Map                       as Map
-import           Data.Text                      (Text,unpack)
+import Data.List (elemIndex, find)
+import qualified Data.Map as Map
+import Data.Text (Text, unpack)
 import qualified Unison.ABT as ABT
-import qualified Unison.ConstructorType         as CT
+import qualified Unison.ConstructorType as CT
+import Unison.DataDeclaration
+  ( DataDeclaration (..),
+    Modifier (Structural, Unique),
+    hashDecls,
+  )
 import qualified Unison.DataDeclaration as DD
-import           Unison.DataDeclaration         ( DataDeclaration(..)
-                                                , Modifier(Structural, Unique)
-                                                , hashDecls )
-import qualified Unison.Pattern                 as Pattern
-import           Unison.Reference               (Reference)
-import qualified Unison.Reference               as Reference
-import           Unison.Referent                (Referent)
-import qualified Unison.Referent                as Referent
-import           Unison.Symbol                  (Symbol)
-import           Unison.Term                    (ConstructorId, Term, Term2)
-import qualified Unison.Term                    as Term
-import qualified Unison.Type                    as Type
-import           Unison.Type                    (Type)
-import qualified Unison.Var                     as Var
-import           Unison.Var                     (Var)
+import qualified Unison.Pattern as Pattern
+import Unison.Reference (Reference)
+import qualified Unison.Reference as Reference
+import Unison.Referent (Referent)
+import qualified Unison.Referent as Referent
+import Unison.Symbol (Symbol)
+import Unison.Term (ConstructorId, Term, Term2)
+import qualified Unison.Term as Term
+import Unison.Type (Type)
+import qualified Unison.Type as Type
+import Unison.Var (Var)
+import qualified Unison.Var as Var
 
 lookupDeclRef :: Text -> Reference
 lookupDeclRef str
-  | [(_, d, _)] <- filter (\(v,_,_) -> v == Var.named str) decls
-  = Reference.DerivedId d
-  | otherwise
-  = error $ "lookupDeclRef: missing \"" ++ unpack str ++ "\""
-  where decls = builtinDataDecls @Symbol
+  | [(_, d, _)] <- filter (\(v, _, _) -> v == Var.named str) decls = Reference.DerivedId d
+  | otherwise = error $ "lookupDeclRef: missing \"" ++ unpack str ++ "\""
+  where
+    decls = builtinDataDecls @Symbol
 
 unitRef, pairRef, optionalRef, eitherRef :: Reference
 unitRef = lookupDeclRef "Unit"
@@ -69,8 +70,8 @@ constructorId ref name = do
   (_,_,dd) <- find (\(_,r,_) -> Reference.DerivedId r == ref) (builtinDataDecls @Symbol)
   elemIndex name $ DD.constructorNames dd
 
-okConstructorId, failConstructorId, docBlobId, docLinkId, docSignatureId, docSourceId, docEvaluateId, docJoinId, linkTermId, linkTypeId :: ConstructorId
-isPropagatedConstructorId, isTestConstructorId :: ConstructorId 
+okConstructorId, failConstructorId, docBlobId, docLinkId, docSignatureId, docSourceId, docEvaluateId, docJoinId, linkTermId, linkTypeId, eitherRightId, eitherLeftId :: ConstructorId
+isPropagatedConstructorId, isTestConstructorId, bufferModeNoBufferingId, bufferModeLineBufferingId, bufferModeBlockBufferingId, bufferModeSizedBlockBufferingId  :: ConstructorId
 Just isPropagatedConstructorId = constructorId isPropagatedRef "IsPropagated.IsPropagated"
 Just isTestConstructorId = constructorId isTestRef "IsTest.IsTest"
 Just okConstructorId = constructorId testResultRef "Test.Result.Ok"
@@ -83,6 +84,13 @@ Just docEvaluateId = constructorId docRef "Doc.Evaluate"
 Just docJoinId = constructorId docRef "Doc.Join"
 Just linkTermId = constructorId linkRef "Link.Term"
 Just linkTypeId = constructorId linkRef "Link.Type"
+Just eitherRightId = constructorId eitherRef "Either.Right"
+Just eitherLeftId = constructorId eitherRef "Either.Left"
+
+Just bufferModeNoBufferingId = constructorId bufferModeRef "io2.BufferMode.NoBuffering"
+Just bufferModeLineBufferingId = constructorId bufferModeRef "io2.BufferMode.LineBuffering"
+Just bufferModeBlockBufferingId = constructorId bufferModeRef "io2.BufferMode.BlockBuffering"
+Just bufferModeSizedBlockBufferingId = constructorId bufferModeRef "io2.BufferMode.SizedBlockBuffering"
 
 okConstructorReferent, failConstructorReferent :: Referent.Referent
 okConstructorReferent = Referent.Con testResultRef okConstructorId CT.Data
@@ -285,10 +293,27 @@ builtinEffectDecls = []
 
 pattern UnitRef <- (unUnitRef -> True)
 pattern PairRef <- (unPairRef -> True)
+pattern EitherRef <- ((==) eitherRef -> True)
 pattern OptionalRef <- (unOptionalRef -> True)
 pattern TupleType' ts <- (unTupleType -> Just ts)
 pattern TupleTerm' xs <- (unTupleTerm -> Just xs)
 pattern TuplePattern ps <- (unTuplePattern -> Just ps)
+pattern EitherLeft' tm <- (unLeftTerm -> Just tm)
+pattern EitherRight' tm <- (unRightTerm -> Just tm)
+pattern EitherLeftId <- ((==) eitherLeftId -> True)
+pattern EitherRightId <- ((==) eitherRightId -> True)
+
+unLeftTerm, unRightTerm
+  :: Term.Term2 vt at ap v a
+  -> Maybe (Term.Term2 vt at ap v a)
+unRightTerm t = case t of
+  Term.App' (Term.Constructor' EitherRef EitherRightId) tm ->
+    Just tm
+  _                           -> Nothing
+unLeftTerm t = case t of
+  Term.App' (Term.Constructor' EitherRef EitherLeftId) tm ->
+    Just tm
+  _                           -> Nothing
 
 -- some pattern synonyms to make pattern matching on some of these constants more pleasant
 pattern DocRef <- ((== docRef) -> True)
@@ -377,4 +402,3 @@ unUnitRef,unPairRef,unOptionalRef:: Reference -> Bool
 unUnitRef = (== unitRef)
 unPairRef = (== pairRef)
 unOptionalRef = (== optionalRef)
-

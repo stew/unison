@@ -25,7 +25,110 @@ flags:
 
 when:
   - condition: flag(optimized)
-    ghc-options: -funbox-strict-fields -02
+    ghc-options: -funbox-strict-fields -O2
+
+library:
+  source-dirs: src
+  dependencies:
+    - aeson
+    - ansi-terminal
+    - async
+    - base
+    - base16 >= 0.2.1.0
+    - base64-bytestring
+    - basement
+    - bifunctors
+    - bytes
+    - bytestring
+    - cereal
+    - containers >= 0.6.3
+    - comonad
+    - concurrent-supply
+    - configurator
+    - cryptonite
+    - data-default
+    - directory
+    - either
+    - fuzzyfind
+    - guid
+    - data-memocombinators
+    - edit-distance
+    - errors
+    - exceptions
+    - extra
+    - filepath
+    - filepattern
+    - fingertree
+    - free
+    - fsnotify
+    - generic-monoid
+    - hashable
+    - hashtables
+    - haskeline
+    - http-types
+    - http-media
+    - io-streams
+    - lens
+    - ListLike
+    - megaparsec >= 5.0.0 && < 7.0.0
+    - memory
+    - mmorph
+    - monad-loops
+    - monad-validate
+    - mtl
+    - murmur-hash
+    - mutable-containers
+    - natural-transformation
+    - network
+    - network-simple
+    - nonempty-containers
+    - openapi3
+    - optparse-applicative
+    - pem
+    - process
+    - primitive
+    - random >= 1.2.0
+    - raw-strings-qq
+    - regex-base
+    - regex-tdfa
+    - safe
+    - safe-exceptions
+    - servant
+    - servant-docs
+    - servant-openapi3
+    - servant-server
+    - servant-auth-server
+    - shellmet
+    - split
+    - stm
+    - strings
+    - sqlite-simple
+    - tagged
+    - temporary
+    - terminal-size
+    - text
+    - time
+    - tls
+    - transformers
+    - unliftio
+    - unliftio-core
+    - utf8-string
+    - util
+    - unicode-show
+    - validation
+    - vector
+    - wai
+    - warp
+    - unicode-show
+    - x509
+    - x509-store
+    - x509-system
+    - unison-codebase
+    - unison-codebase-sqlite
+    - unison-codebase-sync
+    - unison-core
+    - unison-core1
+    - unison-util
 
 executables:
   unison:
@@ -40,6 +143,7 @@ executables:
       - directory
       - errors
       - filepath
+      - lens
       - megaparsec
       - mtl
       - safe
@@ -47,8 +151,9 @@ executables:
       - template-haskell
       - temporary
       - text
-      - unison-core
+      - unison-core1
       - unison-parser-typechecker
+      - unison-codebase-sync
       - uri-encode
     when:
       - condition: '!os(windows)'
@@ -75,6 +180,7 @@ executables:
       - directory
       - easytest
       - errors
+      - exceptions
       - extra
       - filepath
       - filemanip
@@ -90,8 +196,10 @@ executables:
       - text
       - transformers
       - unliftio
-      - unison-core
+      - unison-core1
       - unison-parser-typechecker
+      - unison-util
+
 
   transcripts:
     source-dirs: transcripts
@@ -105,7 +213,7 @@ executables:
       - shellmet
       - process
       - text
-      - unison-core
+      - unison-core1
       - unison-parser-typechecker
 
 benchmarks:
@@ -116,94 +224,5 @@ benchmarks:
       - base
       - criterion
       - containers
-      - unison-core
+      - unison-core1
       - unison-parser-typechecker
-
-library:
-  source-dirs: src
-  dependencies:
-    - aeson
-    - ansi-terminal
-    - async
-    - base
-    - base16 >= 0.2.1.0
-    - base64-bytestring
-    - basement
-    - bifunctors
-    - bytes
-    - bytestring
-    - cereal
-    - containers >= 0.6.3
-    - comonad
-    - concurrent-supply
-    - configurator
-    - cryptonite
-    - data-default
-    - directory
-    - either
-    - guid
-    - data-memocombinators
-    - edit-distance
-    - errors
-    - exceptions
-    - extra
-    - filepath
-    - filepattern
-    - fingertree
-    - free
-    - fsnotify
-    - generic-monoid
-    - hashable
-    - hashtables
-    - haskeline
-    - http-types
-    - io-streams
-    - lens
-    - ListLike
-    - megaparsec >= 5.0.0 && < 7.0.0
-    - memory
-    - mmorph
-    - monad-loops
-    - mtl
-    - murmur-hash
-    - mutable-containers
-    - network
-    - network-simple
-    - nonempty-containers
-    - openapi3
-    - pem
-    - process
-    - primitive
-    - random >= 1.2.0
-    - raw-strings-qq
-    - regex-base
-    - regex-tdfa
-    - safe
-    - safe-exceptions
-    - servant
-    - servant-docs
-    - servant-openapi3
-    - servant-server
-    - shellmet
-    - split
-    - stm
-    - strings
-    - tagged
-    - temporary
-    - terminal-size
-    - text
-    - time
-    - tls
-    - transformers
-    - unison-core
-    - unliftio
-    - unliftio-core
-    - util
-    - unicode-show
-    - vector
-    - wai
-    - warp
-    - unicode-show
-    - x509
-    - x509-store
-    - x509-system

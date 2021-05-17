@@ -1289,7 +1289,7 @@ bprim2 !ustk !bstk IDXB i j = do
     Just x -> do
       poke ustk $ fromIntegral x
       ustk <- bump ustk
-      ustk <$ poke ustk 0
+      ustk <$ poke ustk 1
   pure (ustk, bstk)
 bprim2 !ustk !bstk CATB i j = do
   l <- peekOffBi bstk i
@@ -1315,9 +1315,11 @@ yield !env !denv !ustk !bstk !k = leap denv k
    poke bstk . DataB1 Rf.effectRef 0 =<< peek bstk
    apply env denv ustk bstk k False (BArg1 0) clo
  leap !denv (Push ufsz bfsz uasz basz cix k) = do
-   Lam _ _ _ _ nx <- combSection env cix
+   Lam _ _ uf bf nx <- combSection env cix
    ustk <- restoreFrame ustk ufsz uasz
    bstk <- restoreFrame bstk bfsz basz
+   ustk <- ensure ustk uf
+   bstk <- ensure bstk bf
    eval env denv ustk bstk k nx
  leap _ (CB (Hook f)) = f ustk bstk
  leap _ KE = pure ()

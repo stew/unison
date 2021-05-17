@@ -26,7 +26,6 @@ import           Unison.Codebase                ( Codebase )
 import qualified Unison.Codebase               as Codebase
 import           Unison.Codebase.Branch         ( Branch )
 import qualified Unison.Codebase.Branch        as Branch
-import qualified Unison.Codebase.Editor.Git    as Git
 import           Unison.Parser                  ( Ann )
 import qualified Unison.Parser                 as Parser
 import qualified Unison.Parsers                as Parsers
@@ -86,10 +85,9 @@ commandLine
   -> (SourceName -> IO LoadSourceResult)
   -> Codebase IO v Ann
   -> (Int -> IO gen)
-  -> Branch.Cache IO
   -> Free (Command IO i v) a
   -> IO a
-commandLine config awaitInput setBranchRef rt notifyUser notifyNumbered loadSource codebase rngGen branchCache =
+commandLine config awaitInput setBranchRef rt notifyUser notifyNumbered loadSource codebase rngGen =
  flip State.evalStateT 0 . Free.fold go
  where
   go :: forall x . Command IO i v x -> State.StateT Int IO x
@@ -114,18 +112,20 @@ commandLine config awaitInput setBranchRef rt notifyUser notifyNumbered loadSour
       lift $ typecheck ambient codebase env sourceName source
     TypecheckFile file ambient     -> lift $ typecheck' ambient codebase file
     Evaluate ppe unisonFile        -> lift $ evalUnisonFile ppe unisonFile
-    Evaluate1 ppe term             -> lift $ eval1 ppe term
+    Evaluate1 ppe useCache term    -> lift $ eval1 ppe useCache term
     LoadLocalRootBranch        -> lift $ either (const Branch.empty) id <$> Codebase.getRootBranch codebase
     LoadLocalBranch h          -> lift $ fromMaybe Branch.empty <$> Codebase.getBranchForHash codebase h
+    Merge mode b1 b2 ->
+      lift $ Branch.merge'' (Codebase.lca codebase) mode b1 b2
     SyncLocalRootBranch branch -> lift $ do
       setBranchRef branch
       Codebase.putRootBranch codebase branch
     ViewRemoteBranch ns ->
-      lift $ runExceptT $ Git.viewRemoteBranch branchCache ns
+      lift $ Codebase.viewRemoteBranch codebase ns
     ImportRemoteBranch ns syncMode ->
-      lift $ runExceptT $ Git.importRemoteBranch codebase branchCache ns syncMode
+      lift $ Codebase.importRemoteBranch codebase ns syncMode
     SyncRemoteRootBranch repo branch syncMode ->
-      lift $ runExceptT $ Git.pushGitRootBranch codebase branchCache branch repo syncMode
+      lift $ Codebase.pushGitRootBranch codebase branch repo syncMode
     LoadTerm r -> lift $ Codebase.getTerm codebase r
     LoadType r -> lift $ Codebase.getTypeDeclaration codebase r
     LoadTypeOfTerm r -> lift $ Codebase.getTypeOfTerm codebase r
@@ -178,10 +178,21 @@ commandLine config awaitInput setBranchRef rt notifyUser notifyNumbered loadSour
       lift . runExceptT $ Backend.definitionsBySuffixes mayPath branch codebase query
     FindShallow path -> lift . runExceptT $ Backend.findShallow codebase path
 
-  eval1 :: PPE.PrettyPrintEnv -> Term v Ann -> _
-  eval1 ppe tm = do
+  watchCache (Reference.DerivedId h) = do
+    m1 <- Codebase.getWatch codebase UF.RegularWatch h
+    m2 <- maybe (Codebase.getWatch codebase UF.TestWatch h) (pure . Just) m1
+    pure $ Term.amap (const ()) <$> m2
+  watchCache Reference.Builtin{} = pure Nothing
+
+  eval1 :: PPE.PrettyPrintEnv -> UseCache -> Term v Ann -> _
+  eval1 ppe useCache tm = do
     let codeLookup = Codebase.toCodeLookup codebase
-    r <- Runtime.evaluateTerm codeLookup ppe rt tm
+        cache = if useCache then watchCache else Runtime.noCache
+    r <- Runtime.evaluateTerm' codeLookup cache ppe rt tm
+    when useCache $ case r of
+      Right tmr -> Codebase.putWatch codebase UF.RegularWatch (Term.hashClosedTerm tm)
+                                     (Term.amap (const Parser.External) tmr)
+      Left _ -> pure ()
     pure $ r <&> Term.amap (const Parser.External)
 
   evalUnisonFile :: PPE.PrettyPrintEnv -> UF.TypecheckedUnisonFile v Ann -> _
@@ -191,11 +202,6 @@ commandLine config awaitInput setBranchRef rt notifyUser notifyNumbered loadSour
       if Runtime.needsContainment rt
         then Codebase.makeSelfContained' codeLookup unisonFile
         else pure unisonFile
-    let watchCache (Reference.DerivedId h) = do
-          m1 <- Codebase.getWatch codebase UF.RegularWatch h
-          m2 <- maybe (Codebase.getWatch codebase UF.TestWatch h) (pure . Just) m1
-          pure $ Term.amap (const ()) <$> m2
-        watchCache Reference.Builtin{} = pure Nothing
     r <- Runtime.evaluateWatches codeLookup ppe watchCache rt evalFile
     case r of
       Left e -> pure (Left e)

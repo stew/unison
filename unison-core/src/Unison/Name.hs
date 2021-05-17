@@ -6,6 +6,8 @@
 
 module Unison.Name
   ( Name(Name)
+  , Convert(..)
+  , Parse(..)
   , endsWithSegments
   , fromString
   , isPrefixOf
@@ -19,6 +21,7 @@ module Unison.Name
   , stripNamePrefix
   , stripPrefixes
   , segments
+  , countSegments
   , segments'
   , suffixes
   , toString
@@ -174,6 +177,27 @@ fromSegment = unsafeFromText . NameSegment.toText
 -- e.g. split `base..` into `[base,.]`
 segments :: Name -> [NameSegment]
 segments (Name n) = NameSegment <$> segments' n
+
+countSegments :: Name -> Int
+countSegments n = length (segments n)
+
+class Convert a b where
+  convert :: a -> b
+
+class Parse a b where
+  parse :: a -> Maybe b
+
+instance Convert Name Text where convert = toText
+instance Convert Name [NameSegment] where convert = segments
+instance Convert NameSegment Name where convert = fromSegment
+
+instance Parse Text NameSegment where
+  parse txt = case NameSegment.segments' txt of
+    [n] -> Just (NameSegment.NameSegment n)
+    _ -> Nothing
+
+instance (Parse a a2, Parse b b2) => Parse (a,b) (a2,b2) where
+  parse (a,b) = (,) <$> parse a <*> parse b
 
 instance Lens.Snoc Name Name NameSegment NameSegment where
   _Snoc = Lens.prism snoc unsnoc

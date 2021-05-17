@@ -5,20 +5,17 @@ module Unison.Codebase.Causal where
 
 import Unison.Prelude
 
-import           Prelude                 hiding ( head
-                                                , tail
-                                                , read
-                                                )
-import qualified Control.Monad.State           as State
-import           Control.Monad.State            ( StateT )
-import           Data.Sequence                  ( ViewL(..) )
-import qualified Data.Sequence                 as Seq
-import           Unison.Hash                    ( Hash )
-import qualified Unison.Hashable               as Hashable
-import           Unison.Hashable                ( Hashable )
-import qualified Unison.Util.Cache             as Cache
-import qualified Data.Map                      as Map
-import qualified Data.Set                      as Set
+import Control.Monad.State (StateT)
+import qualified Control.Monad.State as State
+import qualified Data.Map as Map
+import Data.Sequence (ViewL (..))
+import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
+import qualified U.Util.Cache as Cache
+import Unison.Hash (Hash)
+import Unison.Hashable (Hashable)
+import qualified Unison.Hashable as Hashable
+import Prelude hiding (head, read, tail)
 
 {-
 `Causal a` has 5 operations, specified algebraically here:
@@ -240,14 +237,23 @@ squashMerge combine c1 c2 = do
 
       | otherwise -> done <$> combine (Just $ head lca) (head c1) (head c2)
 
-threeWayMerge
-  :: forall m h e
+threeWayMerge :: forall m h e
    . (Monad m, Hashable e)
   => (Maybe e -> e -> e -> m e)
   -> Causal m h e
   -> Causal m h e
   -> m (Causal m h e)
-threeWayMerge combine c1 c2 = do
+threeWayMerge = threeWayMerge' lca
+
+threeWayMerge'
+  :: forall m h e
+   . (Monad m, Hashable e)
+  => (Causal m h e -> Causal m h e -> m (Maybe (Causal m h e)))
+  -> (Maybe e -> e -> e -> m e)
+  -> Causal m h e
+  -> Causal m h e
+  -> m (Causal m h e)
+threeWayMerge' lca combine c1 c2 = do
   theLCA <- lca c1 c2
   case theLCA of
     Nothing -> done <$> combine Nothing (head c1) (head c2)
@@ -261,6 +267,13 @@ threeWayMerge combine c1 c2 = do
   done :: e -> Causal m h e
   done newHead =
     Merge (RawHash (hash (newHead, Map.keys children))) newHead children
+
+before' :: Monad m
+        => (Causal m h e -> Causal m h e -> m (Maybe (Causal m h e)))
+        -> Causal m h e
+        -> Causal m h e
+        -> m Bool
+before' lca a b = (== Just a) <$> lca a b
 
 before :: Monad m => Causal m h e -> Causal m h e -> m Bool
 before a b = (== Just a) <$> lca a b
@@ -295,8 +308,10 @@ one :: Hashable e => e -> Causal m h e
 one e = One (RawHash $ hash e) e
 
 cons :: (Applicative m, Hashable e) => e -> Causal m h e -> Causal m h e
-cons e tl =
-  Cons (RawHash $ hash [hash e, unRawHash . currentHash $ tl]) e (currentHash tl, pure tl)
+cons e tl = cons' e (currentHash tl) (pure tl)
+
+cons' :: Hashable e => e -> RawHash h -> m (Causal m h e) -> Causal m h e
+cons' e ht mt = Cons (RawHash $ hash [hash e, unRawHash ht]) e (ht, mt)
 
 consDistinct :: (Applicative m, Eq e, Hashable e) => e -> Causal m h e -> Causal m h e
 consDistinct e tl =

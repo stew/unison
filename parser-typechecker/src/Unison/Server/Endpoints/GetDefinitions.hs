@@ -29,6 +29,7 @@ import qualified Unison.Server.Backend         as Backend
 import           Unison.Server.Types            ( HashQualifiedName
                                                 , DefinitionDisplayResults
                                                 , defaultWidth
+                                                , Suffixify(..)
                                                 )
 import           Unison.Server.Errors           ( backendError
                                                 , badNamespace
@@ -45,6 +46,7 @@ type DefinitionsAPI =
                   :> QueryParam "relativeTo" HashQualifiedName
                   :> QueryParams "names" HashQualifiedName
                   :> QueryParam "renderWidth" Width
+                  :> QueryParam "suffixifyBindings" Suffixify
   :> Get '[JSON] DefinitionDisplayResults
 
 instance ToParam (QueryParam "renderWidth" Width) where
@@ -59,11 +61,21 @@ instance ToParam (QueryParam "renderWidth" Width) where
     )
     Normal
 
+instance ToParam (QueryParam "suffixifyBindings" Suffixify) where
+  toParam _ = DocQueryParam
+    "suffixifyBindings"
+    ["True", "False"]
+    (  "If True or absent, renders definitions using the shortest unambiguous "
+    <> "suffix. If False, uses the fully qualified name. "
+    )
+    Normal
+
+
 instance ToParam (QueryParam "relativeTo" HashQualifiedName) where
   toParam _ = DocQueryParam
     "relativeTo"
     [".", ".base", "foo.bar"]
-    ("The namespace relative to which the `names` parameter is to be resolved. "
+    ("The namespace relative to which names will be resolved and displayed. "
     <> "If left absent, the root namespace will be used."
     )
     Normal
@@ -89,17 +101,24 @@ instance ToSample DefinitionDisplayResults where
 
 serveDefinitions
   :: Var v
-  => Codebase IO v Ann
+  => Handler ()
+  -> Codebase IO v Ann
   -> Maybe ShortBranchHash
   -> Maybe HashQualifiedName
   -> [HashQualifiedName]
   -> Maybe Width
+  -> Maybe Suffixify
   -> Handler DefinitionDisplayResults
-serveDefinitions codebase mayRoot relativePath hqns width = do
+serveDefinitions h codebase mayRoot relativePath hqns width suff = do
+  h
   rel <- fmap Path.fromPath' <$> traverse (parsePath . Text.unpack) relativePath
   ea  <- liftIO . runExceptT $ do
     root <- traverse (Backend.expandShortBranchHash codebase) mayRoot
-    Backend.prettyDefinitionsBySuffixes rel root width codebase
+    Backend.prettyDefinitionsBySuffixes rel
+                                        root
+                                        width
+                                        (fromMaybe (Suffixify True) suff)
+                                        codebase
       $   HQ.unsafeFromText
       <$> hqns
   errFromEither backendError ea

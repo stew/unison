@@ -436,6 +436,15 @@ pattern BinaryAppsPred' apps lastArg <- (unBinaryAppsPred -> Just (apps, lastArg
 pattern Ann' x t <- (ABT.out -> ABT.Tm (Ann x t))
 pattern List' xs <- (ABT.out -> ABT.Tm (List xs))
 pattern Lam' subst <- ABT.Tm' (Lam (ABT.Abs' subst))
+
+pattern Delay' body <- (unDelay -> Just body)
+unDelay :: Ord v => Term2 vt at ap v a -> Maybe (Term2 vt at ap v a)
+unDelay tm = case ABT.out tm of
+  ABT.Tm (Lam (ABT.Term _ _ (ABT.Abs v body)))
+    |  Set.notMember v (ABT.freeVars body)
+    -> Just body
+  _ -> Nothing
+
 pattern LamNamed' v body <- (ABT.out -> ABT.Tm (Lam (ABT.Term _ _ (ABT.Abs v body))))
 pattern LamsNamed' vs body <- (unLams' -> Just (vs, body))
 pattern LamsNamedOpt' vs body <- (unLamsOpt' -> Just (vs, body))
@@ -467,6 +476,14 @@ var' = var() . Var.named
 
 ref :: Ord v => a -> Reference -> Term2 vt at ap v a
 ref a r = ABT.tm' a (Ref r)
+
+pattern Referent' r <- (unReferent -> Just r)
+
+unReferent :: Term2 vt at ap v a -> Maybe Referent
+unReferent (Ref' r) = Just $ Referent.Ref r
+unReferent (Constructor' r cid) = Just $ Referent.Con r cid CT.Data
+unReferent (Request' r cid) = Just $ Referent.Con r cid CT.Effect
+unReferent _ = Nothing
 
 refId :: Ord v => a -> Reference.Id -> Term2 vt at ap v a
 refId a = ref a . Reference.DerivedId
@@ -576,6 +593,10 @@ ann a e t = ABT.tm' a (Ann e t)
 -- arya: are we sure we want the two annotations to be the same?
 lam :: Ord v => a -> v -> Term2 vt at ap v a -> Term2 vt at ap v a
 lam a v body = ABT.tm' a (Lam (ABT.abs' a v body))
+
+delay :: Var v => a -> Term2 vt at ap v a -> Term2 vt at ap v a
+delay a body =
+  ABT.tm' a (Lam (ABT.abs' a (ABT.freshIn (ABT.freeVars body) (Var.named "_")) body))
 
 lam' :: Ord v => a -> [v] -> Term2 vt at ap v a -> Term2 vt at ap v a
 lam' a vs body = foldr (lam a) body vs
@@ -822,6 +843,21 @@ unReqOrCtor _                         = Nothing
 dependencies :: (Ord v, Ord vt) => Term2 vt at ap v a -> Set Reference
 dependencies t = Set.map (LD.fold id Referent.toReference) (labeledDependencies t)
 
+termDependencies :: (Ord v, Ord vt) => Term2 vt at ap v a -> Set Reference
+termDependencies =
+  Set.fromList
+    . mapMaybe
+      ( LD.fold
+          (\_typeRef -> Nothing)
+          ( Referent.fold
+              (\termRef -> Just termRef)
+              (\_typeConRef _i _ct -> Nothing)
+          )
+      )
+    . toList
+    . labeledDependencies
+
+-- gets types from annotations and constructors
 typeDependencies :: (Ord v, Ord vt) => Term2 vt at ap v a -> Set Reference
 typeDependencies =
   Set.fromList . mapMaybe (LD.fold Just (const Nothing)) . toList . labeledDependencies
@@ -918,9 +954,23 @@ betaNormalForm (App' f a) = betaNormalForm (betaReduce (app() (betaNormalForm f)
 betaNormalForm e = e
 
 -- x -> f x => f
-etaNormalForm :: Eq v => Term0 v -> Term0 v
-etaNormalForm (LamNamed' v (App' f (Var' v'))) | v == v' = etaNormalForm f
-etaNormalForm t = t
+etaNormalForm :: Ord v => Term0 v -> Term0 v
+etaNormalForm tm = case tm of
+  LamNamed' v body -> step . lam (ABT.annotation tm) v $ etaNormalForm body
+    where
+      step (LamNamed' v (App' f (Var' v'))) | v == v' = f
+      step tm = tm
+  _ -> tm
+
+-- x -> f x => f as long as `x` is a variable of type `Var.Eta`
+etaReduceEtaVars :: Var v => Term0 v -> Term0 v
+etaReduceEtaVars tm = case tm of
+  LamNamed' v body -> step . lam (ABT.annotation tm) v $ etaReduceEtaVars body
+    where
+      ok v v' = v == v' && Var.typeOf v == Var.Eta
+      step (LamNamed' v (App' f (Var' v'))) | ok v v' = f
+      step tm = tm
+  _ -> tm
 
 -- This converts `Reference`s it finds that are in the input `Map`
 -- back to free variables
@@ -1082,7 +1132,6 @@ instance (ABT.Var vt, Eq at, Eq a) => Eq (F vt at p a) where
 instance (Show v, Show a) => Show (F v a0 p a) where
   showsPrec = go
    where
-    showConstructor r n = shows r <> s "#" <> shows n
     go _ (Int     n    ) = (if n >= 0 then s "+" else s "") <> shows n
     go _ (Nat     n    ) = shows n
     go _ (Float   n    ) = shows n
@@ -1107,13 +1156,13 @@ instance (Show v, Show a) => Show (F v a0 p a) where
     go _ (Handle b body) = showParen
       True
       (s "handle " <> shows b <> s " in " <> shows body)
-    go _ (Constructor r         n    ) = showConstructor r n
+    go _ (Constructor r         n    ) = s "Con" <> shows r <> s "#" <> shows n
     go _ (Match       scrutinee cases) = showParen
       True
       (s "case " <> shows scrutinee <> s " of " <> shows cases)
     go _ (Text s     ) = shows s
     go _ (Char c     ) = shows c
-    go _ (Request r n) = showConstructor r n
+    go _ (Request r n) = s "Req" <> shows r <> s "#" <> shows n
     go p (If c t f) =
       showParen (p > 0)
         $  s "if "

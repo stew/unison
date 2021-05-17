@@ -8,3 +8,5 @@ scratch.u
 .stack-work
 stack.yaml.lock
 stack
+# GHC
+*.hie

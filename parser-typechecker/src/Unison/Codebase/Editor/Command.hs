@@ -9,17 +9,22 @@ module Unison.Codebase.Editor.Command (
   SourceName,
   TypecheckingResult,
   LoadSourceResult(..),
-  commandName
+  UseCache,
+  EvalResult,
+  commandName,
+  lookupEvalResult
   ) where
 
 import Unison.Prelude
 
+import Control.Lens (_5,view)
 -- TODO: Don't import backend, but move dependencies to own modules
 import           Unison.Server.Backend          ( DefinitionResults
                                                 , ShallowListEntry
                                                 , BackendError
                                                 )
 import           Data.Configurator.Types        ( Configured )
+import qualified Data.Map                      as Map
 
 import           Unison.Codebase.Editor.Output
 import           Unison.Codebase.Editor.RemoteRepo
@@ -149,12 +154,10 @@ data Command m i v a where
 
   Evaluate :: PPE.PrettyPrintEnv
            -> UF.TypecheckedUnisonFile v Ann
-           -> Command m i v (Either Runtime.Error
-                ([(v, Term v ())], Map v
-                (Ann, UF.WatchKind, Reference, Term v (), Term v (), Runtime.IsCacheHit)))
+           -> Command m i v (Either Runtime.Error (EvalResult v))
 
   -- Evaluate a single closed definition
-  Evaluate1 :: PPE.PrettyPrintEnv -> Term v Ann -> Command m i v (Either Runtime.Error (Term v Ann))
+  Evaluate1 :: PPE.PrettyPrintEnv -> UseCache -> Term v Ann -> Command m i v (Either Runtime.Error (Term v Ann))
 
   -- Add a cached watch to the codebase
   PutWatch :: UF.WatchKind -> Reference.Id -> Term v Ann -> Command m i v ()
@@ -170,11 +173,15 @@ data Command m i v a where
   -- Like `LoadLocalRootBranch`.
   LoadLocalBranch :: Branch.Hash -> Command m i v (Branch m)
 
+  -- Merge two branches, using the codebase for the LCA calculation where possible.
+  Merge :: Branch.MergeMode -> Branch m -> Branch m -> Command m i v (Branch m)
+
   ViewRemoteBranch ::
-    RemoteNamespace -> Command m i v (Either GitError (Branch m))
+    RemoteNamespace -> Command m i v (Either GitError (m (), Branch m))
 
   -- we want to import as little as possible, so we pass the SBH/path as part
-  -- of the `RemoteNamespace`.
+  -- of the `RemoteNamespace`.  The Branch that's returned should be fully
+  -- imported and not retain any resources from the remote codebase
   ImportRemoteBranch ::
     RemoteNamespace -> SyncMode -> Command m i v (Either GitError (Branch m))
 
@@ -224,6 +231,16 @@ data Command m i v a where
   RuntimeMain :: Command m i v (Type v Ann)
   RuntimeTest :: Command m i v (Type v Ann)
 
+type UseCache = Bool
+
+type EvalResult v =
+  ( [(v, Term v ())]
+  , Map v (Ann, UF.WatchKind, Reference, Term v (), Term v (), Runtime.IsCacheHit)
+  )
+
+lookupEvalResult :: Ord v => v -> EvalResult v -> Maybe (Term v ())
+lookupEvalResult v (_, m) = view _5 <$> Map.lookup v m
+
 commandName :: Command m i v a -> String
 commandName = \case
   Eval{}                      -> "Eval"
@@ -248,6 +265,7 @@ commandName = \case
   LoadWatches{}               -> "LoadWatches"
   LoadLocalRootBranch         -> "LoadLocalRootBranch"
   LoadLocalBranch{}           -> "LoadLocalBranch"
+  Merge{}                     -> "Merge"
   ViewRemoteBranch{}          -> "ViewRemoteBranch"
   ImportRemoteBranch{}        -> "ImportRemoteBranch"
   SyncLocalRootBranch{}       -> "SyncLocalRootBranch"
