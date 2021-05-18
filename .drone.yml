@@ -81,7 +81,7 @@ steps:
       - mkdir -p /tmp/ucm/ui
       - cp $UCM /tmp/ucm/ucm
       - export ARCHIVE=unison-${DRONE_BUILD_NUMBER}.tar.gz
-      - wget -O/tmp/ucm.zip https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip
+      - wget -O/tmp/ucm.zip https://github.com/unisonweb/codebase-ui/releases/download/latest/unisonShare.zip
       - unzip -d /tmp/ucm/ui /tmp/ucm.zip
       - tar -c -z -f $ARCHIVE -C /tmp/ucm .
       - vault login -method=cert -client-cert=/root/host_crt.pem -client-key=/root/host_key.pem 2>&1 > /dev/null
