@@ -39,7 +39,7 @@ import qualified Unison.Typechecker.TypeLookup as TL
 import qualified Unison.UnisonFile as UF
 import qualified Unison.Util.Relation as Rel
 import qualified Unison.Util.Set as Set
-import Unison.Util.Timing (time)
+import U.Util.Timing (time)
 import Unison.Var (Var)
 import qualified Unison.Var as Var
 import UnliftIO.Directory (getHomeDirectory)
@@ -343,7 +343,8 @@ importRemoteBranch codebase ns mode = runExceptT do
   ExceptT
     let h = Branch.headHash branch
         err = Left $ GitError.CouldntLoadSyncedBranch h
-    in (getBranchForHash codebase h <&> maybe err Right) <* cleanup
+    in time "load fresh local branch after sync" $
+      (getBranchForHash codebase h <&> maybe err Right) <* cleanup
 
 -- | Pull a git branch and view it from the cache, without syncing into the
 -- local codebase.
