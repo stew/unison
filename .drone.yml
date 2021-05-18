@@ -80,7 +80,7 @@ steps:
       - UCM=$(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin/unison
       - mkdir -p /tmp/ucm/ui
       - cp $UCM /tmp/ucm/ucm
-      - export ARCHIVE=unison-$(date +%F).tar.gz
+      - export ARCHIVE=unison-${DRONE_BUILD_NUMBER}.tar.gz
       - wget -O/tmp/ucm.zip https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip
       - unzip -d /tmp/ucm/ui /tmp/ucm.zip
       - tar -c -z -f $ARCHIVE -C /tmp/ucm .
