@@ -174,6 +174,8 @@ builtinTypesSrc =
   , B' "Tls.ServerConfig" CT.Data, Rename' "Tls.ServerConfig" "io2.Tls.ServerConfig"
   , B' "Tls.SignedCert" CT.Data, Rename' "Tls.SignedCert" "io2.Tls.SignedCert"
   , B' "Tls.PrivateKey" CT.Data, Rename' "Tls.PrivateKey" "io2.Tls.PrivateKey"
+  , B' "Tls.Version" CT.Data, Rename' "Tls.Version" "io2.Tls.Version"
+  , B' "Tls.Cipher" CT.Data, Rename' "Tls.Cipher" "io2.Tls.Cipher"
   , B' "TVar" CT.Data, Rename' "TVar" "io2.TVar"
   , B' "STM" CT.Effect, Rename' "STM" "io2.STM"
   ]
@@ -426,7 +428,7 @@ builtinsSrc =
   , B "Bytes.fromBase64" $ bytes --> eithert text bytes
   , B "Bytes.fromBase64UrlUnpadded" $ bytes --> eithert text bytes
 
-  , B "List.empty" $ forall1 "a" list
+  , D "List.empty" $ forall1 "a" list
   , B "List.cons" $ forall1 "a" (\a -> a --> list a --> list a)
   , Alias "List.cons" "List.+:"
   , B "List.snoc" $ forall1 "a" (\a -> list a --> a --> list a)

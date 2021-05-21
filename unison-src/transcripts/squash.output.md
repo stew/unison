@@ -13,7 +13,7 @@ Let's look at some examples. We'll start with a namespace with just the builtins
   
   
   
-  □ #klkpbos013 (start of history)
+  □ #6hs3tdioa1 (start of history)
 
 .> fork builtin builtin2
 
@@ -42,21 +42,21 @@ Now suppose we `fork` a copy of builtin, then rename `Nat.+` to `frobnicate`, th
   Note: The most recent namespace hash is immediately below this
         message.
   
-  ⊙ #2389gjnigh
+  ⊙ #lirpkqt68j
   
     > Moves:
     
       Original name  New name
       Nat.frobnicate Nat.+
   
-  ⊙ #l7dr0sq1vj
+  ⊙ #p2m2k852al
   
     > Moves:
     
       Original name New name
       Nat.+         Nat.frobnicate
   
-  □ #klkpbos013 (start of history)
+  □ #6hs3tdioa1 (start of history)
 
 ```
 If we merge that back into `builtin`, we get that same chain of history:
@@ -71,21 +71,21 @@ If we merge that back into `builtin`, we get that same chain of history:
   Note: The most recent namespace hash is immediately below this
         message.
   
-  ⊙ #2389gjnigh
+  ⊙ #lirpkqt68j
   
     > Moves:
     
       Original name  New name
       Nat.frobnicate Nat.+
   
-  ⊙ #l7dr0sq1vj
+  ⊙ #p2m2k852al
   
     > Moves:
     
       Original name New name
       Nat.+         Nat.frobnicate
   
-  □ #klkpbos013 (start of history)
+  □ #6hs3tdioa1 (start of history)
 
 ```
 Let's try again, but using a `merge.squash` (or just `squash`) instead. The history will be unchanged:
@@ -106,7 +106,7 @@ Let's try again, but using a `merge.squash` (or just `squash`) instead. The hist
   
   
   
-  □ #klkpbos013 (start of history)
+  □ #6hs3tdioa1 (start of history)
 
 ```
 The churn that happened in `mybuiltin` namespace ended up back in the same spot, so the squash merge of that namespace with our original namespace had no effect.
@@ -467,6 +467,97 @@ Another thing we can do is `squash` into an empty namespace. This effectively ma
 ```
 There's nothing really special here, `squash src dest` discards `src` history that comes after the LCA of `src` and `dest`, it's just that in the case of an empty namespace, that LCA is the beginning of time (the empty namespace), so all the history of `src` is discarded.
 
+## Checking for handling of deletes
+
+This checks to see that squashing correctly preserves deletions:
+
+```ucm
+  ☝️  The namespace .delete is empty.
+
+.delete> builtins.merge
+
+  Done.
+
+.delete> fork builtin builtin2
+
+  Done.
+
+.delete> delete.term builtin2.Nat.+
+
+  Name changes:
+  
+    Original                    Changes
+    1. builtin.Nat.+         ┐  2. delete.builtin2.Nat.+ (removed)
+    3. builtin2.Nat.+        │  
+    4. delete.builtin.Nat.+  │  
+    5. delete.builtin2.Nat.+ │  
+    6. mybuiltin.Nat.+       ┘  
+  
+  Tip: You can use `undo` or `reflog` to undo this change.
+
+.delete> delete.term builtin2.Nat.*
+
+  Name changes:
+  
+    Original                    Changes
+    1. builtin.Nat.*         ┐  2. delete.builtin2.Nat.* (removed)
+    3. builtin2.Nat.*        │  
+    4. delete.builtin.Nat.*  │  
+    5. delete.builtin2.Nat.* │  
+    6. mybuiltin.Nat.*       ┘  
+  
+  Tip: You can use `undo` or `reflog` to undo this change.
+
+.delete> squash builtin2 builtin
+
+  Here's what's changed in builtin after the merge:
+  
+  Removed definitions:
+  
+    1. Nat.* : Nat -> Nat -> Nat
+    2. Nat.+ : Nat -> Nat -> Nat
+  
+  Tip: You can use `todo` to see if this generated any work to
+       do in this namespace and `test` to run the tests. Or you
+       can use `undo` or `reflog` to undo the results of this
+       merge.
+
+.delete> history builtin
+
+  Note: The most recent namespace hash is immediately below this
+        message.
+  
+  ⊙ #8jcsn0thlb
+  
+    - Deletes:
+    
+      Nat.* Nat.+
+  
+  □ #6hs3tdioa1 (start of history)
+
+```
+Notice that `Nat.+` and `Nat.*` are deleted by the squash, and we see them deleted in one atomic step in the history.
+
+Just confirming that those two definitions are in fact removed:
+
+```ucm
+.delete> view .delete.builtin.Nat.+
+
+  ⚠️
+  
+  The following names were not found in the codebase. Check your spelling.
+    .delete.builtin.Nat.+
+
+```
+```ucm
+.delete> view .delete.builtin.Nat.*
+
+  ⚠️
+  
+  The following names were not found in the codebase. Check your spelling.
+    .delete.builtin.Nat.*
+
+```
 ## Caveats
 
 If you `squash mystuff trunk`, you're discarding any history of `mystuff` and just cons'ing onto the history of `trunk`. Thus, don't expect to be able to `merge trunk mystuff later and get great results. Squashing should only be used when you don't care about the history (and you know others haven't pulled and built on your line of history being discarded, so they don't care about the history either).

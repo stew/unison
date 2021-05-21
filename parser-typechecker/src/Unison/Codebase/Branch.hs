@@ -397,7 +397,7 @@ merge'' _ mode b1 b2 | isEmpty b2 = case mode of
 merge'' lca mode (Branch x) (Branch y) =
   Branch <$> case mode of
                RegularMerge -> Causal.threeWayMerge' lca' combine x y
-               SquashMerge  -> Causal.squashMerge combine x y
+               SquashMerge  -> Causal.squashMerge' lca' combine x y
  where
   lca' c1 c2 = fmap _history <$> lca (Branch c1) (Branch c2)
   combine :: Maybe (Branch0 m) -> Branch0 m -> Branch0 m -> m (Branch0 m)
@@ -510,13 +510,13 @@ numHashChars _b = 3
 
 -- This type is a little ugly, so we wrap it up with a nice type alias for
 -- use outside this module.
-type Cache m = Cache.Cache m (Causal.RawHash Raw) (UnwrappedBranch m)
+type Cache m = Cache.Cache (Causal.RawHash Raw) (UnwrappedBranch m)
 
-boundedCache :: MonadIO m => Word -> m (Cache m)
+boundedCache :: MonadIO m => Word -> m (Cache m2)
 boundedCache = Cache.semispaceCache
 
 -- Can use `Cache.nullCache` to disable caching if needed
-cachedRead :: forall m . Monad m
+cachedRead :: forall m . MonadIO m
            => Cache m
            -> Causal.Deserialize m Raw Raw
            -> (EditHash -> m Patch)
