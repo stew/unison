@@ -53,7 +53,7 @@ jobs:
       - name: fetch latest codebase-ui and package with ucm
         run: |
           mkdir -p /tmp/ucm/ui
-          UCM=$(stack --work-dir stack --stack-root $PWD/stack path | awk '/local-install-root/{print $2}')/bin/unison
+          UCM=$(stack path | awk '/local-install-root/{print $2}')/bin/unison
           cp $UCM /tmp/ucm/ucm
           curl https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip > /tmp/ucm.zip
           unzip -d /tmp/ucm/ui /tmp/ucm.zip
