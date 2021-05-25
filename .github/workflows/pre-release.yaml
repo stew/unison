@@ -55,7 +55,7 @@ jobs:
           mkdir -p /tmp/ucm/ui
           UCM=$(stack path | awk '/local-install-root/{print $2}')/bin/unison
           cp $UCM /tmp/ucm/ucm
-          curl https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip > /tmp/ucm.zip
+          wget -O/tmp/ucm.zip https://github.com/unisonweb/codebase-ui/releases/download/latest/ucm.zip
           unzip -d /tmp/ucm/ui /tmp/ucm.zip
           tar -c -z -f unison-${{runner.os}}.tar.gz -C /tmp/ucm .
 
