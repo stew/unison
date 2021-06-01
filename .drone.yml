@@ -53,7 +53,7 @@ steps:
       mount:
         - stack
     commands:
-      - stack --work-dir stack --stack-root $PWD/stack build --flag parser-typechecker:optimized
+      - stack --work-dir stack --stack-root $PWD/stack build --flag unison-parser-typechecker:optimized
       - stack --work-dir stack --stack-root $PWD/stack test
       - stack --work-dir stack --stack-root $PWD/stack exec transcripts
 
